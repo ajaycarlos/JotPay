@@ -2,19 +2,20 @@
     <style name="Base.Theme.MoneyLog" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/accent_calm</item>
 
-        <item name="android:statusBarColor">@color/bg_app</item>
-        <item name="android:windowLightStatusBar">false</item>
-
-        <item name="materialAlertDialogTheme">@style/ChatLiteDialog</item>
+        <item name="android:statusBarColor">@color/light_bg_app</item>
+        <item name="android:windowLightStatusBar">true</item> <item name="materialAlertDialogTheme">@style/ChatLiteDialog</item>
     </style>
 
     <style name="Theme.MoneyLog" parent="Base.Theme.MoneyLog" />
 
     <style name="ChatLiteDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="colorSurface">@color/drawer_surface</item>
-        <item name="colorContainer">@color/drawer_surface</item>
-        <item name="android:background">@null</item> <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:background">@drawable/bg_dialog_light</item>
+        <item name="colorSurface">@color/light_surface</item>
+        <item name="colorContainer">@color/light_surface</item>
+
+        <item name="android:textColorPrimary">@color/light_text_primary</item>
+        <item name="android:textColorSecondary">@color/light_text_secondary</item>
+        <item name="android:textColorAlertDialogListItem">@color/light_text_primary</item>
 
         <item name="colorPrimary">@color/income_muted</item>
         <item name="colorAccent">@color/income_muted</item>

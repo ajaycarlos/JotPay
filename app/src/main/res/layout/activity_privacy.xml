@@ -1,36 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_app"
     android:padding="24dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:text="Privacy Policy"
+        android:textColor="@color/text_primary"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"/>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Privacy Policy"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp"
-            android:textColor="#000000"/>
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="24dp"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintBottom_toTopOf="@id/btnClose">
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:lineSpacingExtra="4dp"
-            android:text="1. Data Collection\nThis app does NOT collect, transmit, or share any user data. All data (transactions and logs) is stored 100% locally on your specific device.\n\n2. Internet Usage\nThis app does not use the Internet. It functions completely offline.\n\n3. Third-Party Services\nNo third-party analytics, tracking, or advertising SDKs are present in this application.\n\n4. Data Security\nYour financial logs are stored in a secure local database (SQLite/Room) on your phone. If you uninstall the app, this data is permanently deleted by the Android OS.\n\n5. Contact\nSince we do not collect data, we do not have access to your personal information." />
+            android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btnClose"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Close"
-            android:layout_marginTop="24dp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Your Data is Yours."
+                android:textColor="@color/income_muted"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp"/>
 
-    </LinearLayout>
-</ScrollView>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="1. Local Storage Only\nAll your financial logs are stored locally on your device in a secure database. We do not upload your data to any cloud server.\n\n2. No Tracking\nThis app has no analytics, no ads, and no trackers. You are completely anonymous.\n\n3. Export Capability\nYou have full freedom to export your data to CSV or Text files at any time.\n\n4. Permissions\nThe app requires no special permissions (internet, location, contacts) to function."
+                android:textColor="@color/text_secondary"
+                android:textSize="16sp"
+                android:lineSpacingExtra="6dp"/>
+        </LinearLayout>
+    </ScrollView>
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btnClose"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Close"
+        android:textColor="@color/text_primary"
+        android:background="@drawable/bg_message_card"
+        android:stateListAnimator="@null"
+        android:textAllCaps="false"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
