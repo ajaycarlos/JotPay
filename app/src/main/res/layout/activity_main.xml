@@ -5,12 +5,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/bg_app">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="16dp">
+        android:paddingTop="16dp">
 
         <ImageButton
             android:id="@+id/btnMenu"
@@ -18,6 +19,8 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_menu_hamburger"
             android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="@color/text_primary"
+            android:layout_marginStart="8dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
@@ -27,6 +30,8 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_search"
             android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="@color/text_primary"
+            android:layout_marginEnd="8dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
@@ -37,10 +42,10 @@
             android:background="@drawable/bg_card_gradient"
             android:orientation="vertical"
             android:elevation="4dp"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="16dp"
             android:layout_marginTop="8dp"
-            android:layout_marginEnd="8dp"
-            android:padding="20dp"
+            android:layout_marginEnd="16dp"
+            android:padding="24dp"
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackground"
@@ -52,18 +57,19 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Net Balance"
-                android:textColor="#B2DFDB"
-                android:textSize="14sp"
-                android:letterSpacing="0.05"/>
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1"/>
 
             <TextView
                 android:id="@+id/tvTotalBalance"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="0.00"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text_primary"
                 android:textSize="32sp"
-                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
                 android:layout_marginTop="4dp"/>
         </LinearLayout>
 
@@ -71,12 +77,16 @@
             android:id="@+id/etSearch"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_input_rounded"
-            android:hint="Search transactions..."
+            android:background="@drawable/bg_message_card"
+            android:hint="Search..."
             android:padding="12dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
             android:layout_marginTop="12dp"
             android:drawableStart="@drawable/ic_search"
-            android:drawablePadding="8dp"
+            android:drawablePadding="12dp"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_tertiary"
             android:visibility="gone"
             app:layout_constraintTop_toBottomOf="@id/cardBalance"
             app:layout_constraintStart_toStartOf="parent"
@@ -86,7 +96,7 @@
             android:id="@+id/tvMonthlySummary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#00796B"
+            android:textColor="@color/income_muted"
             android:textSize="14sp"
             android:textStyle="italic"
             android:visibility="gone"
@@ -100,7 +110,7 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="0dp"
             app:layout_constraintTop_toBottomOf="@id/tvMonthlySummary"
             app:layout_constraintBottom_toTopOf="@id/layoutSignToggles"
             app:layout_constraintStart_toStartOf="parent"
@@ -110,10 +120,10 @@
             android:id="@+id/tvEmptyState"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Type +500 salary or -40 bus to begin"
+            android:text="Start your financial stream."
             android:textAlignment="center"
-            android:textColor="#888888"
-            android:textSize="16sp"
+            android:textColor="@color/text_tertiary"
+            android:textSize="14sp"
             android:visibility="gone"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -125,35 +135,34 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="4dp"
+            android:layout_marginBottom="8dp"
+            android:layout_marginStart="20dp"
             android:visibility="invisible"
             app:layout_constraintBottom_toTopOf="@id/layoutInput"
-            app:layout_constraintStart_toStartOf="@id/layoutInput">
+            app:layout_constraintStart_toStartOf="parent">
 
             <TextView
                 android:id="@+id/btnPlus"
-                android:layout_width="40dp"
+                android:layout_width="44dp"
                 android:layout_height="32dp"
                 android:text="+"
                 android:gravity="center"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="#2E7D32"
-                android:background="@drawable/bg_date_header"
-                android:backgroundTint="#E8F5E9"
+                android:textColor="@color/income_muted"
+                android:background="@drawable/bg_message_card"
                 android:layout_marginEnd="8dp"/>
 
             <TextView
                 android:id="@+id/btnMinus"
-                android:layout_width="40dp"
+                android:layout_width="44dp"
                 android:layout_height="32dp"
                 android:text="-"
                 android:gravity="center"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="#C62828"
-                android:background="@drawable/bg_date_header"
-                android:backgroundTint="#FFEBEE"/>
+                android:textColor="@color/expense_muted"
+                android:background="@drawable/bg_message_card"/>
         </LinearLayout>
 
         <TextView
@@ -161,7 +170,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:textColor="#00796B"
+            android:textColor="@color/text_secondary"
             android:textStyle="bold"
             android:textSize="14sp"
             android:paddingBottom="8dp"
@@ -175,8 +184,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
             android:paddingTop="8dp"
-            android:paddingBottom="8dp"
+            android:paddingBottom="16dp"
             android:gravity="bottom"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -187,7 +198,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:background="@drawable/bg_input_rounded"
+                android:background="@drawable/bg_message_card"
                 android:hint="Type here..."
                 android:inputType="textCapSentences|textMultiLine"
                 android:completionThreshold="1"
@@ -195,19 +206,20 @@
                 android:minHeight="48dp"
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
                 android:layout_marginEnd="8dp"
-                android:textSize="16sp" />
+                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"/>
 
             <ImageButton
                 android:id="@+id/btnSend"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:background="@drawable/bg_date_header"
-                android:backgroundTint="#004D40"
+                android:background="@drawable/bg_card_gradient"
                 android:src="@drawable/baseline_send_24"
-                app:tint="#FFFFFF"
+                app:tint="@color/text_primary"
                 android:scaleType="centerInside" />
         </LinearLayout>
 
@@ -218,6 +230,15 @@
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        app:menu="@menu/drawer_menu" />
+        android:background="@drawable/bg_drawer_surface"
+        app:menu="@menu/drawer_menu"
+        app:itemIconTint="@color/text_secondary"
+        app:itemTextColor="@color/text_primary"
+        app:subheaderColor="@color/text_tertiary"
+        app:itemHorizontalPadding="24dp"
+        app:itemIconPadding="24dp"
+        app:itemShapeFillColor="@color/drawer_ripple"
+        app:elevation="0dp"
+        android:paddingTop="32dp"/>
 
 </androidx.drawerlayout.widget.DrawerLayout>

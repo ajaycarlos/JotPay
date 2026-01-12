@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <color name="bg_app">#121212</color>
+    <color name="bg_surface">#1E1E1E</color>
+
+    <color name="text_primary">#E0E0E0</color>
+    <color name="text_secondary">#9E9E9E</color>
+    <color name="text_tertiary">#616161</color>
+
+    <color name="income_muted">#81C784</color>
+    <color name="expense_muted">#E57373</color>
+
+    <color name="drawer_surface">#232323</color> <color name="drawer_ripple">#33FFFFFF</color> <color name="accent_calm">#263238</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
 </resources>

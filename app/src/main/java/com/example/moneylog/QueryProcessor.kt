@@ -2,27 +2,49 @@ package com.example.moneylog
 
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.abs
 
 class QueryProcessor(private val transactions: List<Transaction>) {
 
     fun process(query: String): String {
-        val lowerQuery = query.lowercase(Locale.getDefault())
+        val lowerQuery = query.lowercase(Locale.getDefault()).trim()
 
-        // 1. "Who owes whom" / Debt Logic
+        // 1. Debt Logic ("owe", "lent", "borrow")
         if (lowerQuery.contains("owe") || lowerQuery.contains("lent") || lowerQuery.contains("borrow")) {
             return processDebtQuery(lowerQuery)
         }
 
-        // 2. Spending/Income Analysis
-        if (lowerQuery.contains("spent") || lowerQuery.contains("cost") || lowerQuery.contains("expense")) {
-            return processSpendingQuery(lowerQuery, isExpense = true)
+        // 2. Spending/Income Analysis ("spent", "earned", "cost", etc.)
+        if (lowerQuery.contains("spent") || lowerQuery.contains("cost") || lowerQuery.contains("expense") ||
+            lowerQuery.contains("earned") || lowerQuery.contains("income") || lowerQuery.contains("made")) {
+            val isExpense = !lowerQuery.contains("earned") && !lowerQuery.contains("income") && !lowerQuery.contains("made")
+            return processSpendingQuery(lowerQuery, isExpense)
         }
 
-        if (lowerQuery.contains("earned") || lowerQuery.contains("income") || lowerQuery.contains("made")) {
-            return processSpendingQuery(lowerQuery, isExpense = false)
+        // 3. FALLBACK: General Keyword Summary
+        // If the user types just "mom", "bus", "salary" -> Show net total for that word.
+        return processGeneralSummary(lowerQuery)
+    }
+
+    private fun processGeneralSummary(keyword: String): String {
+        // Filter transactions that contain the keyword in the description
+        val matches = transactions.filter { it.description.lowercase().contains(keyword) }
+
+        if (matches.isEmpty()) {
+            return "I didn't understand that. Try 'How much spent on food' or 'Does mom owe me?'"
         }
 
-        return "I didn't understand that. Try 'How much spent on food' or 'Does mom owe me?'"
+        val total = matches.sumOf { it.amount }
+        val absTotal = abs(total)
+
+        // Return a smart summary based on the net result
+        return if (total < 0) {
+            "Total spent on '$keyword': $absTotal"
+        } else if (total > 0) {
+            "Total received from '$keyword': $absTotal"
+        } else {
+            "Break-even for '$keyword' (Total: 0)"
+        }
     }
 
     private fun processSpendingQuery(query: String, isExpense: Boolean): String {
@@ -44,7 +66,7 @@ class QueryProcessor(private val transactions: List<Transaction>) {
         val sum = matchedList.filter { if(isExpense) it.amount < 0 else it.amount > 0 }
             .sumOf { it.amount }
 
-        val absSum = kotlin.math.abs(sum)
+        val absSum = abs(sum)
         val timeFrame = if(query.contains("month")) "this month" else if(query.contains("week")) "this week" else if(query.contains("today")) "today" else "in total"
 
         return if (isExpense) "You spent $absSum on '${keywords.joinToString(" ")}' $timeFrame."
@@ -52,10 +74,8 @@ class QueryProcessor(private val transactions: List<Transaction>) {
     }
 
     private fun processDebtQuery(query: String): String {
-        // Extract person name (simple heuristic: word not in common dictionary)
+        // Extract person name
         val stopWords = listOf("how", "much", "does", "do", "i", "owe", "me", "money", "to", "from", "is", "my", "mother", "mom", "dad", "father", "friend")
-        // We actually want to KEEP names like "mom", "arun" etc.
-        // Better approach: Search existing descriptions for matches.
 
         var person = ""
         val potentialNames = query.split(" ")
@@ -79,7 +99,7 @@ class QueryProcessor(private val transactions: List<Transaction>) {
         val net = relevant.sumOf { it.amount }
 
         return if (net < 0) {
-            "${person.replaceFirstChar { it.uppercase() }} owes you ${kotlin.math.abs(net)}"
+            "${person.replaceFirstChar { it.uppercase() }} owes you ${abs(net)}"
         } else if (net > 0) {
             "You owe ${person.replaceFirstChar { it.uppercase() }} $net"
         } else {
@@ -89,7 +109,6 @@ class QueryProcessor(private val transactions: List<Transaction>) {
 
     private fun filterByTime(list: List<Transaction>, query: String): List<Transaction> {
         val cal = Calendar.getInstance()
-        val now = System.currentTimeMillis()
 
         if (query.contains("today")) {
             cal.set(Calendar.HOUR_OF_DAY, 0)

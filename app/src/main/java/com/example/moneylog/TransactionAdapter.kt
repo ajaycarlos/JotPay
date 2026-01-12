@@ -1,11 +1,5 @@
 package com.example.moneylog
 
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.text.Spannable
-import android.text.SpannableString
-import android.text.style.StyleSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -21,8 +15,8 @@ class TransactionAdapter(
     private val onDeleteClick: (Transaction) -> Unit
 ) : RecyclerView.Adapter<TransactionAdapter.TransactionViewHolder>() {
 
-    private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
-    private val dateFullFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    private val timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
+    private val dateFullFormatter = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())
 
     inner class TransactionViewHolder(val binding: ItemTransactionBinding) :
         RecyclerView.ViewHolder(binding.root)
@@ -36,37 +30,34 @@ class TransactionAdapter(
 
     override fun onBindViewHolder(holder: TransactionViewHolder, position: Int) {
         val item = transactions[position]
+        val context = holder.itemView.context
 
-        // --- 3) TRANSACTION AMOUNT FORMATTING ---
-        // Logic: Remove trailing .0 if present
+        // 1. Context Text (Line 1)
+        holder.binding.tvMessage.text = item.description
+
+        // 2. Amount Styling (Line 2)
+        // Clean formatting: Remove trailing .0
         val amountStr = if (item.amount % 1.0 == 0.0) {
             item.amount.toInt().toString()
         } else {
             item.amount.toString()
         }
 
-        // Format: "500  salary"
-        val fullText = "$amountStr  ${item.description}"
-        val spannable = SpannableString(fullText)
+        val isIncome = item.amount >= 0
+        // Visual sign for clarity
+        val displayAmount = if (isIncome) "+ $amountStr" else amountStr.replace("-", "- ")
 
-        // Bold the amount
-        val firstSpace = fullText.indexOf(' ')
-        if (firstSpace != -1) {
-            spannable.setSpan(StyleSpan(Typeface.BOLD), 0, firstSpace, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        holder.binding.tvMessage.text = spannable
+        holder.binding.tvAmount.text = displayAmount
 
-        // Time
+        // 3. Color Logic (Muted Chat-Lite Colors)
+        // Using context.getColorCompat style safely
+        val colorRes = if (isIncome) R.color.income_muted else R.color.expense_muted
+        holder.binding.tvAmount.setTextColor(context.resources.getColor(colorRes, null))
+
+        // 4. Time
         holder.binding.tvTime.text = timeFormatter.format(Date(item.timestamp))
 
-        // Colors (Existing Consistency)
-        val bubbleColor = if (item.amount >= 0) "#C8E6C9" else "#FFCDD2"
-        val drawable = GradientDrawable()
-        drawable.setColor(Color.parseColor(bubbleColor))
-        drawable.cornerRadius = 24f
-        holder.binding.layoutBubble.background = drawable
-
-        // Date Headers (Existing)
+        // 5. Date Headers (Separators)
         val headerText = getDateHeader(item.timestamp)
         var showHeader = position == 0
         if (position > 0) {
@@ -81,6 +72,7 @@ class TransactionAdapter(
             holder.binding.tvDateHeader.visibility = View.GONE
         }
 
+        // 6. Delete Action
         holder.binding.layoutBubble.setOnLongClickListener {
             onDeleteClick(item)
             true
