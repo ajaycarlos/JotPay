@@ -5,8 +5,10 @@ import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
+import android.text.InputType
 import android.text.TextWatcher
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.room.Room
 import com.example.moneylog.databinding.ActivityMainBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder // NEW IMPORT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,45 +77,32 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupSearch()
-        setupInputPreview()
         setupSignToggles()
-        setupKeyboardSwitching()
+        setupInputLogic()
     }
 
-    // --- CONTINUOUS MATH INPUT SUPPORT ---
-
+    // --- 1) BUTTON SETUP & KEYBOARD TRIGGER ---
     private fun setupSignToggles() {
         binding.btnPlus.setOnClickListener { insertSign("+") }
         binding.btnMinus.setOnClickListener { insertSign("-") }
 
-        // Ensure visibility updates on focus
-        binding.etInput.setOnFocusChangeListener { _, _ -> updateSignToggleVisibility() }
-
-        // Initial check
-        updateSignToggleVisibility()
+        updateButtonVisibility(binding.etInput.text.isEmpty())
     }
 
     private fun insertSign(sign: String) {
-        // 1. Force focus and show keyboard
-        binding.etInput.requestFocus()
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-        imm.showSoftInput(binding.etInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-
-        // 2. Insert the sign at cursor position
-        val start = binding.etInput.selectionStart.coerceAtLeast(0)
+        val start = binding.etInput.selectionStart
         binding.etInput.text.insert(start, sign)
-        // Note: TextWatcher will trigger updateSignToggleVisibility automatically
+
+        binding.etInput.post {
+            binding.etInput.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.etInput, InputMethodManager.SHOW_IMPLICIT)
+        }
     }
 
-    private fun updateSignToggleVisibility() {
-        val text = binding.etInput.text.toString()
-
-        // UPDATED LOGIC:
-        // Only show buttons if the field is completely empty.
-        // As soon as the user inserts a sign or types a letter, the buttons will fade out.
-        val shouldShow = text.isEmpty()
-
-        if (shouldShow) {
+    private fun updateButtonVisibility(show: Boolean) {
+        binding.layoutSignToggles.animate().cancel()
+        if (show) {
             if (binding.layoutSignToggles.visibility != View.VISIBLE) {
                 binding.layoutSignToggles.alpha = 0f
                 binding.layoutSignToggles.visibility = View.VISIBLE
@@ -127,120 +117,94 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupKeyboardSwitching() {
+    // --- 2) INPUT LOGIC ---
+    private fun setupInputLogic() {
+        binding.etInput.filters = arrayOf()
+
         binding.etInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
             override fun afterTextChanged(s: Editable?) {
+                if (s == null) return
                 val text = s.toString()
+                val cursor = binding.etInput.selectionStart
 
-                val isTransactionStart = text.startsWith("+") || text.startsWith("-")
-                val hasSpace = text.contains(" ")
+                updateButtonVisibility(text.isEmpty())
 
-                // --- 1. KEYBOARD LOGIC ---
-                val typeText = android.text.InputType.TYPE_CLASS_TEXT or
-                        android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
-                        android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-
-                // DateTime allows numbers, signs (+ - /), and SPACE.
-                val typeNumeric = android.text.InputType.TYPE_CLASS_DATETIME
-
-                // If in Phase 1, force Numeric/Math keyboard. Otherwise Text.
-                val targetType = if (isTransactionStart && !hasSpace) {
-                    typeNumeric
-                } else {
-                    typeText
-                }
-
-                if (binding.etInput.inputType != targetType) {
-                    val selStart = binding.etInput.selectionStart
-                    val selEnd = binding.etInput.selectionEnd
-                    binding.etInput.inputType = targetType
-                    if (selStart >= 0 && selEnd >= 0) {
-                        binding.etInput.setSelection(selStart, selEnd)
+                if (cursor >= 2 && text.length >= cursor) {
+                    val sub = text.subSequence(cursor - 2, cursor)
+                    if (sub == "--") {
+                        s.replace(cursor - 2, cursor, "+")
+                        return
                     }
                 }
 
-                // --- 2. UX HINT LOGIC ---
+                val isTransaction = text.startsWith("+") || text.startsWith("-")
+                val hasSpace = text.contains(" ")
+
                 if (text.isEmpty()) {
+                    setInputType(isNumericRequest = false)
                     binding.etInput.hint = "Type: -50 coffee"
-                } else if (isTransactionStart && !hasSpace) {
-                    // Phase 1 Hint
-                    binding.etInput.hint = "Amount (supports + - * /)"
-                } else {
-                    // Phase 2 Hint
+                }
+                else if (isTransaction && !hasSpace) {
+                    setInputType(isNumericRequest = true)
+                    binding.etInput.hint = "Amount (-- for +)"
+                }
+                else {
+                    setInputType(isNumericRequest = false)
                     binding.etInput.hint = "Description"
                 }
+
+                updatePreview(text)
             }
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
     }
 
-    // --- EXISTING FEATURES & HELPERS ---
+    private fun setInputType(isNumericRequest: Boolean) {
+        val targetType = if (isNumericRequest) {
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        } else {
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
 
-    private fun checkMonthlyCheckpoint() {
-        val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
-        val lastSeen = prefs.getString("last_month_checkpoint", "")
-
-        val cal = Calendar.getInstance()
-        val currentMonthKey = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.time)
-
-        if (lastSeen != currentMonthKey) {
-            cal.add(Calendar.MONTH, -1)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
-            cal.set(Calendar.HOUR_OF_DAY, 0)
-            cal.set(Calendar.MINUTE, 0)
-            val start = cal.timeInMillis
-
-            cal.add(Calendar.MONTH, 1)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
-            val end = cal.timeInMillis
-
-            lifecycleScope.launch(Dispatchers.IO) {
-                val list = db.transactionDao().getAll()
-                val prevMonthList = list.filter { it.timestamp in start until end }
-
-                if (prevMonthList.isNotEmpty()) {
-                    val sum = prevMonthList.sumOf { it.amount }
-                    val prevMonthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(java.util.Date(start))
-
-                    withContext(Dispatchers.Main) {
-                        val symbol = CurrencyHelper.getSymbol(this@MainActivity)
-                        val fmtSum = if (sum % 1.0 == 0.0) sum.toInt().toString() else String.format("%.1f", sum)
-
-                        binding.tvMonthlySummary.text = "Last month ($prevMonthName): $symbol $fmtSum"
-                        binding.tvMonthlySummary.visibility = View.VISIBLE
-                        prefs.edit().putString("last_month_checkpoint", currentMonthKey).apply()
-                    }
-                }
-            }
+        if (binding.etInput.inputType != targetType) {
+            val selStart = binding.etInput.selectionStart
+            val selEnd = binding.etInput.selectionEnd
+            binding.etInput.inputType = targetType
+            if (selStart >= 0) binding.etInput.setSelection(selStart, selEnd)
         }
     }
 
-    private fun updateAutocomplete(list: List<Transaction>) {
-        val frequencyMap = HashMap<String, HashMap<String, Int>>()
-        for (t in list) {
-            val amountStr = if (t.amount % 1.0 == 0.0) t.amount.toInt().toString() else t.amount.toString()
-            val map = frequencyMap.getOrDefault(amountStr, HashMap())
-            val count = map.getOrDefault(t.description, 0)
-            map[t.description] = count + 1
-            frequencyMap[amountStr] = map
+    private fun updatePreview(text: String) {
+        if (text.isBlank()) {
+            binding.tvInputPreview.visibility = View.GONE
+            return
         }
+        val parts = text.trim().split(" ", limit = 2)
+        val mathPart = parts[0]
+        val descPart = if (parts.size > 1) parts[1] else ""
 
-        val suggestions = ArrayList<String>()
-        for ((amount, descMap) in frequencyMap) {
-            val topDesc = descMap.maxByOrNull { it.value }
-            if (topDesc != null && topDesc.value >= 2) {
-                suggestions.add("$amount ${topDesc.key}")
-            }
+        val mathResult = evaluateMath(mathPart)
+        val amount = mathResult ?: mathPart.toDoubleOrNull() ?: 0.0
+
+        if (amount != 0.0 || mathResult != null) {
+            val type = if (amount >= 0) "Credit" else "Debit"
+            val absAmount = kotlin.math.abs(amount)
+            val cleanDesc = if (descPart.isBlank()) "..." else descPart
+            val symbol = CurrencyHelper.getSymbol(this@MainActivity)
+            val fmtAmount = if (absAmount % 1.0 == 0.0) absAmount.toInt().toString() else String.format("%.1f", absAmount)
+
+            binding.tvInputPreview.text = "$type $symbol$fmtAmount · $cleanDesc"
+            binding.tvInputPreview.visibility = View.VISIBLE
+        } else {
+            binding.tvInputPreview.visibility = View.GONE
         }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, suggestions)
-        binding.etInput.setAdapter(adapter)
     }
 
     private fun evaluateMath(expression: String): Double? {
         try {
             if (!expression.matches(Regex("[-+*/.0-9]+"))) return null
-
             val tokens = ArrayList<String>()
             var buffer = StringBuilder()
             for (char in expression) {
@@ -266,7 +230,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 i++
             }
-
             i = 0
             while (i < tokens.size) {
                 if (tokens[i] == "*" || tokens[i] == "/") {
@@ -276,13 +239,11 @@ class MainActivity : AppCompatActivity() {
                     val next = tokens[i + 1].toDouble()
                     val res = if (op == "*") prev * next else prev / next
                     tokens[i - 1] = res.toString()
-                    tokens.removeAt(i)
-                    tokens.removeAt(i)
+                    tokens.removeAt(i); tokens.removeAt(i)
                     i--
                 }
                 i++
             }
-
             if (tokens.isEmpty()) return null
             var result = tokens[0].toDouble()
             i = 1
@@ -295,49 +256,7 @@ class MainActivity : AppCompatActivity() {
                 i += 2
             }
             return result
-
-        } catch (e: Exception) {
-            return null
-        }
-    }
-
-    private fun setupInputPreview() {
-        binding.etInput.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                // Trigger visibility update for buttons here
-                updateSignToggleVisibility()
-
-                val text = s.toString().trim()
-                if (text.isEmpty()) {
-                    binding.tvInputPreview.visibility = View.GONE
-                    return
-                }
-
-                val parts = text.split(" ", limit = 2)
-                val mathPart = parts[0]
-                val descPart = if (parts.size > 1) parts[1] else ""
-
-                val mathResult = evaluateMath(mathPart)
-                val amount = mathResult ?: mathPart.toDoubleOrNull() ?: 0.0
-
-                if (amount != 0.0 || mathResult != null) {
-                    val type = if (amount >= 0) "Credit" else "Debit"
-                    val absAmount = kotlin.math.abs(amount)
-                    val cleanDesc = if(descPart.isBlank()) "..." else descPart
-                    val symbol = CurrencyHelper.getSymbol(this@MainActivity)
-                    val fmtAmount = if (absAmount % 1.0 == 0.0) absAmount.toInt().toString() else String.format("%.1f", absAmount)
-
-                    binding.tvInputPreview.text = "$type $symbol$fmtAmount · $cleanDesc"
-                    binding.tvInputPreview.visibility = View.VISIBLE
-                } else {
-                    binding.tvInputPreview.visibility = View.GONE
-                }
-            }
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-        })
-
-        binding.etInput.setOnClickListener { updateSignToggleVisibility() }
+        } catch (e: Exception) { return null }
     }
 
     private fun handleInput() {
@@ -347,13 +266,11 @@ class MainActivity : AppCompatActivity() {
         val split = rawText.split(" ", limit = 2)
         val mathPart = split[0]
         val desc = if (split.size > 1) split[1] else "General"
-
         val evaluatedAmount = evaluateMath(mathPart)
 
         if (evaluatedAmount != null || mathPart.toDoubleOrNull() != null) {
             val finalAmount = evaluatedAmount ?: mathPart.toDouble()
             val finalRawText = if (finalAmount % 1.0 == 0.0) "${finalAmount.toInt()} $desc" else "$finalAmount $desc"
-
             binding.btnSend.isEnabled = false
             if (editingTransaction == null) saveTransaction(finalRawText, finalAmount, desc)
             else updateTransaction(finalRawText, finalAmount, desc)
@@ -370,17 +287,66 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkMonthlyCheckpoint() {
+        val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
+        val lastSeen = prefs.getString("last_month_checkpoint", "")
+        val cal = Calendar.getInstance()
+        val currentMonthKey = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.time)
+
+        if (lastSeen != currentMonthKey) {
+            cal.add(Calendar.MONTH, -1)
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            val start = cal.timeInMillis
+            cal.add(Calendar.MONTH, 1)
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            val end = cal.timeInMillis
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                val list = db.transactionDao().getAll()
+                val prevMonthList = list.filter { it.timestamp in start until end }
+                if (prevMonthList.isNotEmpty()) {
+                    val sum = prevMonthList.sumOf { it.amount }
+                    val prevMonthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(java.util.Date(start))
+                    withContext(Dispatchers.Main) {
+                        val symbol = CurrencyHelper.getSymbol(this@MainActivity)
+                        val fmtSum = if (sum % 1.0 == 0.0) sum.toInt().toString() else String.format("%.1f", sum)
+                        binding.tvMonthlySummary.text = "Last month ($prevMonthName): $symbol $fmtSum"
+                        binding.tvMonthlySummary.visibility = View.VISIBLE
+                        prefs.edit().putString("last_month_checkpoint", currentMonthKey).apply()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateAutocomplete(list: List<Transaction>) {
+        val frequencyMap = HashMap<String, HashMap<String, Int>>()
+        for (t in list) {
+            val amountStr = if (t.amount % 1.0 == 0.0) t.amount.toInt().toString() else t.amount.toString()
+            val map = frequencyMap.getOrDefault(amountStr, HashMap())
+            val count = map.getOrDefault(t.description, 0)
+            map[t.description] = count + 1
+            frequencyMap[amountStr] = map
+        }
+        val suggestions = ArrayList<String>()
+        for ((amount, descMap) in frequencyMap) {
+            val topDesc = descMap.maxByOrNull { it.value }
+            if (topDesc != null && topDesc.value >= 2) suggestions.add("$amount ${topDesc.key}")
+        }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, suggestions)
+        binding.etInput.setAdapter(adapter)
+    }
+
     private fun loadData() {
         lifecycleScope.launch(Dispatchers.IO) {
             val list = db.transactionDao().getAll()
             val total = list.sumOf { it.amount }
-
             withContext(Dispatchers.Main) {
                 adapter.updateData(list)
                 updateAutocomplete(list)
-
                 val symbol = CurrencyHelper.getSymbol(this@MainActivity)
-
                 if (list.isEmpty()) {
                     binding.tvEmptyState.text = "Type +500 salary or -40 bus to begin"
                     binding.tvEmptyState.visibility = View.VISIBLE
@@ -389,7 +355,6 @@ class MainActivity : AppCompatActivity() {
                     binding.tvEmptyState.visibility = View.GONE
                     binding.rvTransactions.visibility = View.VISIBLE
                 }
-
                 if (currentDisplayedBalance != total) {
                     val animator = ValueAnimator.ofFloat(currentDisplayedBalance.toFloat(), total.toFloat())
                     animator.duration = 500
@@ -411,7 +376,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCurrencySelector(isFirstLaunch: Boolean) {
         val currencies = CurrencyHelper.CURRENCIES
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        // USE MATERIAL DIALOG BUILDER
+        MaterialAlertDialogBuilder(this)
             .setTitle("Select Currency")
             .setCancelable(!isFirstLaunch)
             .setItems(currencies) { _, which ->
@@ -501,14 +467,24 @@ class MainActivity : AppCompatActivity() {
                 fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toInt().toString() else d.toString()
                 val symbol = CurrencyHelper.getSymbol(this@MainActivity)
                 val summary = "Today:      $symbol ${fmt(todaySum)}\nThis Week:  $symbol ${fmt(weekSum)}\nThis Month: $symbol ${fmt(monthSum)}\nAll Time:   $symbol ${fmt(totalSum)}"
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity).setTitle("Performance Summary").setMessage(summary).setPositiveButton("OK", null).show()
+
+                // USE MATERIAL DIALOG BUILDER
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle("Performance Summary")
+                    .setMessage(summary)
+                    .setPositiveButton("OK", null)
+                    .show()
             }
         }
     }
 
     private fun showExportDialog() {
         val options = arrayOf("CSV (Excel)", "Text File (Readable)")
-        androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Export Data").setItems(options) { _, which -> if (which == 0) exportData(true) else exportData(false) }.show()
+        // USE MATERIAL DIALOG BUILDER
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Export Data")
+            .setItems(options) { _, which -> if (which == 0) exportData(true) else exportData(false) }
+            .show()
     }
 
     private fun exportData(isCsv: Boolean) {
@@ -547,13 +523,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showResultDialog(q: String, a: String) { androidx.appcompat.app.AlertDialog.Builder(this).setTitle(q).setMessage(a).setPositiveButton("OK", null).show() }
-    private fun showActionDialog(transaction: Transaction) { val options = arrayOf("Edit", "Delete"); androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Choose Action").setItems(options) { _, which -> when (which) { 0 -> startEditing(transaction); 1 -> confirmDelete(transaction) } }.show() }
+    private fun showResultDialog(q: String, a: String) {
+        // USE MATERIAL DIALOG BUILDER
+        MaterialAlertDialogBuilder(this)
+            .setTitle(q)
+            .setMessage(a)
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun showActionDialog(transaction: Transaction) {
+        val options = arrayOf("Edit", "Delete")
+        // USE MATERIAL DIALOG BUILDER
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Choose Action")
+            .setItems(options) { _, which -> when (which) { 0 -> startEditing(transaction); 1 -> confirmDelete(transaction) } }
+            .show()
+    }
+
     private fun startEditing(transaction: Transaction) { editingTransaction = transaction; binding.etInput.setText(transaction.originalText); binding.etInput.setSelection(transaction.originalText.length); binding.btnSend.background.setTint(android.graphics.Color.parseColor("#FF9800")); binding.etInput.requestFocus() }
     private fun updateTransaction(original: String, amount: Double, desc: String) { val current = editingTransaction ?: return; lifecycleScope.launch(Dispatchers.IO) { val updated = current.copy(originalText = original, amount = amount, description = desc); db.transactionDao().update(updated); withContext(Dispatchers.Main) { resetInput(); loadData(); showError("Updated") } } }
     private fun saveTransaction(original: String, amount: Double, desc: String) { lifecycleScope.launch(Dispatchers.IO) { val transaction = Transaction(originalText = original, amount = amount, description = desc, timestamp = System.currentTimeMillis()); db.transactionDao().insert(transaction); withContext(Dispatchers.Main) { resetInput(); loadData(); binding.rvTransactions.scrollToPosition(0) } } }
     private fun resetInput() { binding.etInput.text.clear(); binding.btnSend.isEnabled = true; binding.btnSend.background.setTint(android.graphics.Color.parseColor("#004D40")); editingTransaction = null }
-    private fun confirmDelete(transaction: Transaction) { androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Delete?").setMessage(transaction.originalText).setPositiveButton("Delete") { _, _ -> deleteTransaction(transaction) }.setNegativeButton("Cancel", null).show() }
+
+    private fun confirmDelete(transaction: Transaction) {
+        // USE MATERIAL DIALOG BUILDER
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Delete?")
+            .setMessage(transaction.originalText)
+            .setPositiveButton("Delete") { _, _ -> deleteTransaction(transaction) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun deleteTransaction(transaction: Transaction) { lifecycleScope.launch(Dispatchers.IO) { db.transactionDao().delete(transaction); withContext(Dispatchers.Main) { loadData(); showError("Deleted") } } }
     private fun showError(msg: String) { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() }
 }
