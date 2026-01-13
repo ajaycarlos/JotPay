@@ -504,7 +504,7 @@ class MainActivity : AppCompatActivity() {
                     sb.append("${dateFormat.format(date)},${timeFormat.format(date)},${fmt(t.amount)},\"${t.description.replace("\"", "\"\"")}\"\n")
                 }
             } else {
-                sb.append("MONEYLOG REPORT\nCurrency: $symbol\n=================\n")
+                sb.append("JOTPAY REPORT\nCurrency: $symbol\n=================\n")
                 for (t in transactions) {
                     val date = java.util.Date(t.timestamp)
                     sb.append("[${dateFormat.format(date)}] ${fmt(t.amount)} ${t.description}\n")
@@ -512,7 +512,7 @@ class MainActivity : AppCompatActivity() {
             }
             try {
                 val ext = if(isCsv) "csv" else "txt"
-                val file = File(cacheDir, "MoneyLog_Backup.$ext")
+                val file = File(cacheDir, "JotPay_Backup.$ext")
                 file.writeText(sb.toString())
                 val uri = androidx.core.content.FileProvider.getUriForFile(this@MainActivity, "$packageName.provider", file)
                 val intent = android.content.Intent(android.content.Intent.ACTION_SEND)
@@ -525,10 +525,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showResultDialog(q: String, a: String) {
-        // USE MATERIAL DIALOG BUILDER
+        // Use MaterialAlertDialogBuilder to bring back the Premium Design
         MaterialAlertDialogBuilder(this)
             .setTitle(q)
-            .setMessage(a)
+            // This line makes the <small> and <br> tags actually work
+            .setMessage(android.text.Html.fromHtml(a, android.text.Html.FROM_HTML_MODE_LEGACY))
             .setPositiveButton("OK", null)
             .show()
     }

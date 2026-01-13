@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MoneyLog"
+rootProject.name = "JotPay"
 include(":app")

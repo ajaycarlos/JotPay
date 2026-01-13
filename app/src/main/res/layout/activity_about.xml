@@ -31,7 +31,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="MoneyLog"
+            android:text="JotPay"
             android:textColor="@color/income_muted"
             android:textSize="32sp"
             android:textStyle="bold"
@@ -55,7 +55,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Ajay Pulikkal"
+            android:text="Ajay Dev."
             android:textColor="@color/text_primary"
             android:textSize="20sp"
             android:textStyle="bold"

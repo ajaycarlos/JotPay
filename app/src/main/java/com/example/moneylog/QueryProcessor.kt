@@ -31,7 +31,8 @@ class QueryProcessor(private val transactions: List<Transaction>) {
         val matches = transactions.filter { it.description.lowercase().contains(keyword) }
 
         if (matches.isEmpty()) {
-            return "I didn't understand that. Try 'How much spent on food' or 'Does mom owe me?'"
+            // New text with HTML tags for styling (<small>)
+            return "No transactions found matching that description.<br><br><small>Try using keywords like 'Food', 'Salary', or 'Rent'.</small>"
         }
 
         val total = matches.sumOf { it.amount }
