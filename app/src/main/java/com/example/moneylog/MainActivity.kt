@@ -480,8 +480,14 @@ class MainActivity : AppCompatActivity() {
                         val amount = parts[2].toDoubleOrNull() ?: 0.0
                         val desc = parts.subList(3, parts.size).joinToString(",").replace("\"", "")
                         val timestamp = try { dateFormat.parse("${parts[0]} ${parts[1]}")?.time } catch (e:Exception) { System.currentTimeMillis() } ?: System.currentTimeMillis()
-                        db.transactionDao().insert(Transaction(originalText = "$amount $desc", amount = amount, description = desc, timestamp = timestamp))
-                        count++
+
+// FIX: Check for duplicates (allowing a 60-second window since export loses seconds)
+                        val duplicateCount = db.transactionDao().checkDuplicate(amount, desc, timestamp, timestamp + 59999)
+
+                        if (duplicateCount == 0) {
+                            db.transactionDao().insert(Transaction(originalText = "$amount $desc", amount = amount, description = desc, timestamp = timestamp))
+                            count++
+                        }
                     }
                     line = reader.readLine()
                 }
