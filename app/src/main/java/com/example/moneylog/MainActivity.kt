@@ -82,6 +82,15 @@ class MainActivity : AppCompatActivity() {
         setupKeyboardSwitching()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Fix: If the app was minimized while 'Edit Mode' (Orange) was active,
+        // this cancels it so the app looks fresh (Green) when you return.
+        if (editingTransaction != null) {
+            resetInput()
+        }
+    }
+
     // --- CONTINUOUS MATH INPUT SUPPORT ---
 
     private fun setupSignToggles() {
@@ -589,7 +598,7 @@ class MainActivity : AppCompatActivity() {
         editingTransaction = transaction
         binding.etInput.setText(transaction.originalText)
         binding.etInput.setSelection(transaction.originalText.length)
-        binding.btnSend.background.setTint(android.graphics.Color.parseColor("#FF9800"))
+        binding.btnSend.background.mutate().setTint(android.graphics.Color.parseColor("#FF9800"))
 
         // NEW LINE: Show the cancel button
         binding.btnCancelEdit.visibility = View.VISIBLE
@@ -601,7 +610,7 @@ class MainActivity : AppCompatActivity() {
     private fun resetInput() {
         binding.etInput.text.clear()
         binding.btnSend.isEnabled = true
-        binding.btnSend.background.setTint(android.graphics.Color.parseColor("#004D40"))
+        binding.btnSend.background.mutate().setTintList(null)
         editingTransaction = null
 
         // NEW LINE: Hide the cancel button
