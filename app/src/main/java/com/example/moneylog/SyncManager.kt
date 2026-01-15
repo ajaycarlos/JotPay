@@ -61,6 +61,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 }
 
                 // STEP 2: Process Local Data
+                var deletedOps = 0 // <--- NEW COUNTER
                 val localData = db.transactionDao().getAll()
                 for (t in localData) {
                     val uniqueId = generateId(t, secretKey)
@@ -68,6 +69,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     if (deletedIds.contains(uniqueId)) {
                         // "I have it, but the Cloud says it's dead." -> Kill it locally.
                         db.transactionDao().delete(t)
+                        deletedOps++ // <--- COUNT THE DELETION
                     } else {
                         // It's alive. Upload it.
                         val json = "{\"o\":\"${t.originalText}\", \"a\":${t.amount}, \"d\":\"${t.description}\", \"t\":${t.timestamp}}"
@@ -82,11 +84,6 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
                 for (child in serverSnapshot.children) {
                     val encryptedJson = child.getValue(String::class.java) ?: continue
-
-                    // Optimization: If we already have this ID locally, skip decryption
-                    // (We can't easily check ID match in Room without iterating,
-                    // but we can trust the 'deletedIds' check we just did).
-
                     val jsonStr = EncryptionHelper.decrypt(encryptedJson, secretKey)
 
                     if (jsonStr.isNotEmpty()) {
@@ -126,8 +123,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 }
 
                 withContext(Dispatchers.Main) {
-                    if (newItemsCount > 0) {
-                        onComplete("Synced: $newItemsCount new items")
+                    // FIX: Check BOTH counters. If anything changed, say "Synced"
+                    if (newItemsCount > 0 || deletedOps > 0) {
+                        onComplete("Synced: $newItemsCount new, $deletedOps deleted")
                     } else {
                         onComplete("Sync Complete: Up to date")
                     }

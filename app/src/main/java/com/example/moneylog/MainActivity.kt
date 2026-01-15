@@ -663,15 +663,19 @@ class MainActivity : AppCompatActivity() {
     }
     private fun runSync() {
         syncManager.syncData { message ->
-            // 1. Show message if needed
+            // 1. Show message if actual work was done (Synced) or if Error
             if (message.contains("Error") || message.contains("Synced")) {
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+                // 2. REFRESH SCREEN logic
+                // Now that SyncManager reports deletions as "Synced
                 if (message.contains("Synced")) {
                     loadData()
                 }
             }
 
-            // 2. STOP the spinning animation (Crucial!)
+            // 3. STOP SPINNER
+
             binding.swipeRefresh.isRefreshing = false
         }
     }
