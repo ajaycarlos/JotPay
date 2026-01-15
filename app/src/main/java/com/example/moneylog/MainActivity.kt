@@ -28,6 +28,7 @@ import java.util.ArrayList
 import java.util.Calendar
 import java.util.HashMap
 import java.util.Locale
+import android.content.Intent
 
 class MainActivity : AppCompatActivity() {
 
@@ -36,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: TransactionAdapter
     private var editingTransaction: Transaction? = null
     private var currentDisplayedBalance = 0.0
+    private lateinit var syncManager: SyncManager
 
     private val importLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { importData(it) }
@@ -47,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "moneylog-db").build()
+        syncManager = SyncManager(this, db)
 
         adapter = TransactionAdapter(emptyList()) { transaction -> showActionDialog(transaction) }
         binding.rvTransactions.layoutManager = LinearLayoutManager(this)
@@ -72,6 +75,11 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_currency -> showCurrencySelector(isFirstLaunch = false)
                 R.id.nav_privacy -> startActivity(android.content.Intent(this, PrivacyActivity::class.java))
                 R.id.nav_about -> startActivity(android.content.Intent(this, AboutActivity::class.java))
+                R.id.nav_link_device -> {
+                    startActivity(Intent(this, LinkDeviceActivity::class.java))
+                    binding.drawerLayout.closeDrawer(GravityCompat.START)
+                    true
+                }
             }
             true
         }
@@ -84,14 +92,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Fix: If the app was minimized while 'Edit Mode' (Orange) was active,
-        // this cancels it so the app looks fresh (Green) when you return.
+        // 1. Fix: Auto-reset Edit Mode if needed
         if (editingTransaction != null) {
             resetInput()
         }
+
+        // 2. New: Check for cloud updates immediately
+        runSync()
     }
 
-    // --- CONTINUOUS MATH INPUT SUPPORT ---
 
     private fun setupSignToggles() {
         binding.btnPlus.setOnClickListener { insertSign("+") }
@@ -605,8 +614,31 @@ class MainActivity : AppCompatActivity() {
 
         binding.etInput.requestFocus()
     }
-    private fun updateTransaction(original: String, amount: Double, desc: String) { val current = editingTransaction ?: return; lifecycleScope.launch(Dispatchers.IO) { val updated = current.copy(originalText = original, amount = amount, description = desc); db.transactionDao().update(updated); withContext(Dispatchers.Main) { resetInput(); loadData(); showError("Updated") } } }
-    private fun saveTransaction(original: String, amount: Double, desc: String) { lifecycleScope.launch(Dispatchers.IO) { val transaction = Transaction(originalText = original, amount = amount, description = desc, timestamp = System.currentTimeMillis()); db.transactionDao().insert(transaction); withContext(Dispatchers.Main) { resetInput(); loadData(); binding.rvTransactions.scrollToPosition(0) } } }
+    private fun updateTransaction(original: String, amount: Double, desc: String) {
+        val current = editingTransaction ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val updated = current.copy(originalText = original, amount = amount, description = desc)
+            db.transactionDao().update(updated)
+            withContext(Dispatchers.Main) {
+                resetInput()
+                loadData()
+                showError("Updated")
+                runSync() // <--- Added Sync Trigger
+            }
+        }
+    }
+    private fun saveTransaction(original: String, amount: Double, desc: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val transaction = Transaction(originalText = original, amount = amount, description = desc, timestamp = System.currentTimeMillis())
+            db.transactionDao().insert(transaction)
+            withContext(Dispatchers.Main) {
+                resetInput()
+                loadData()
+                binding.rvTransactions.scrollToPosition(0)
+                runSync() // <--- Added Sync Trigger
+            }
+        }
+    }
     private fun resetInput() {
         binding.etInput.text.clear()
         binding.btnSend.isEnabled = true
@@ -624,6 +656,27 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null)
             .show()
     }
-    private fun deleteTransaction(transaction: Transaction) { lifecycleScope.launch(Dispatchers.IO) { db.transactionDao().delete(transaction); withContext(Dispatchers.Main) { loadData(); showError("Deleted") } } }
+    private fun runSync() {
+        syncManager.syncData { message ->
+            // Only show message if it's an Error (like 101 busy) or if actual data was synced.
+            // We stay silent if it just says "Up to date" to not annoy the user.
+            if (message.contains("Error") || message.contains("Synced")) {
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                if (message.contains("Synced")) {
+                    loadData() // Refresh list if new data came in
+                }
+            }
+        }
+    }
+    private fun deleteTransaction(transaction: Transaction) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            db.transactionDao().delete(transaction)
+            withContext(Dispatchers.Main) {
+                loadData()
+                showError("Deleted")
+                runSync() // <--- Added Sync Trigger
+            }
+        }
+    }
     private fun showError(msg: String) { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() }
 }

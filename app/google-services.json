@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "976724538310",
+    "project_id": "jotpay-e86c5",
+    "storage_bucket": "jotpay-e86c5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:976724538310:android:fb6765e98beaba3daf78c7",
+        "android_client_info": {
+          "package_name": "com.ajaydev.jotpay"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlaOLLlXaQ6qpxofMcVmJxvyE25VBAlxM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
