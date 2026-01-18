@@ -73,6 +73,31 @@ class MainActivity : AppCompatActivity() {
         if (isSetupDone) {
             checkMonthlyCheckpoint()
         }
+
+        // FIX: Handle Back Press to close Search
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (binding.etSearch.visibility == View.VISIBLE) {
+                    closeSearchBar()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+    }
+
+    // Helper to close search and hide keyboard
+    private fun closeSearchBar() {
+        binding.etSearch.text.clear()
+        binding.etSearch.visibility = View.GONE
+        binding.btnCloseSearch.visibility = View.GONE // Hide the X button
+
+        // Hide Keyboard
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.etSearch.windowToken, 0)
+
+        viewModel.refreshData() // Reset list to show all items
     }
 
     override fun onResume() {
@@ -373,21 +398,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
+        // Search Icon Click: NOW ONLY OPENS
         binding.btnSearch.setOnClickListener {
-            if (binding.etSearch.visibility == View.VISIBLE) {
-                // Close Search
-                binding.etSearch.visibility = View.GONE
-                binding.etSearch.text.clear()
-                viewModel.refreshData() // Reset list
-            } else {
+            if (binding.etSearch.visibility != View.VISIBLE) {
                 // Open Search
                 binding.etSearch.visibility = View.VISIBLE
+                binding.btnCloseSearch.visibility = View.VISIBLE // Show X button
                 binding.etSearch.requestFocus()
+
                 val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                 imm.showSoftInput(binding.etSearch, InputMethodManager.SHOW_IMPLICIT)
             }
         }
 
+        // "X" Button Click: CLOSES Search
+        binding.btnCloseSearch.setOnClickListener {
+            closeSearchBar()
+        }
+
+        // Text Watcher
         binding.etSearch.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
                 val query = s.toString().trim()

@@ -1,22 +1,25 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("kotlin-kapt")
+    alias(libs.plugins.ksp)
     id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.moneylog"
-    compileSdk {
-        version = release(36)
-    }
+
+    // FIX: Updated to 35 to match androidx.core:1.15.0 requirements
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 16
-        versionName = "1.5.1"
+
+        // FIX: Updated to 35 to match compileSdk
+        targetSdk = 35
+
+        versionCode = 17
+        versionName = "1.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,18 +55,27 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
+    // --- ROOM DATABASE (KSP) ---
     val room_version = "2.6.1"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
-    kapt("androidx.room:room-compiler:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+
+    // --- FIREBASE ---
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-database")
-    // QR Code Support
+
+    // --- QR CODE ---
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("com.google.zxing:core:3.4.1")
+
+    // --- BACKGROUND WORK & UI ---
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // --- LIFECYCLE (MVVM) ---
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.6.2")
-    implementation("androidx.activity:activity-ktx:1.8.0") // For "by viewModels()"
+    implementation("androidx.activity:activity-ktx:1.8.0")
 }

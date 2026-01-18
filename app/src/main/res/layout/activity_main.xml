@@ -81,6 +81,7 @@
             android:background="@drawable/bg_message_card"
             android:hint="Search..."
             android:padding="12dp"
+            android:paddingEnd="48dp"
             android:layout_marginStart="16dp"
             android:layout_marginEnd="16dp"
             android:layout_marginTop="12dp"
@@ -92,6 +93,20 @@
             app:layout_constraintTop_toBottomOf="@id/cardBalance"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"/>
+
+        <ImageButton
+            android:id="@+id/btnCloseSearch"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_close"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:visibility="gone"
+            app:tint="@color/text_secondary"
+            app:layout_constraintEnd_toEndOf="@id/etSearch"
+            app:layout_constraintTop_toTopOf="@id/etSearch"
+            app:layout_constraintBottom_toBottomOf="@id/etSearch"
+            android:layout_marginEnd="4dp"
+            android:elevation="2dp" />
 
         <TextView
             android:id="@+id/tvMonthlySummary"
