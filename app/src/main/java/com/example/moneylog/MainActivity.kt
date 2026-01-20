@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: TransactionAdapter
     private var editingTransaction: Transaction? = null
+    private var balanceAnimator: ValueAnimator? = null
     private var currentDisplayedBalance = 0.0
 
     // Launcher for Importing CSV
@@ -136,23 +137,45 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // B. Watch for Balance changes
+        // B. Watch for Balance changes (The Fix)
         viewModel.totalBalance.observe(this) { total ->
+            val finalTotal = total ?: 0.0 // Safety check for null
             val symbol = CurrencyHelper.getSymbol(this)
 
-            // Animate the number change
-            if (currentDisplayedBalance != total) {
-                val animator = ValueAnimator.ofFloat(currentDisplayedBalance.toFloat(), total.toFloat())
+            // 1. ALWAYS Cancel any running animation to prevent conflicts
+            balanceAnimator?.cancel()
+            balanceAnimator = null
+
+            // 2. Animate only if value changed significantly
+            if (currentDisplayedBalance != finalTotal) {
+                val startVal = currentDisplayedBalance
+                val endVal = finalTotal
+
+                val animator = ValueAnimator.ofFloat(0f, 1f)
                 animator.duration = 500
                 animator.addUpdateListener { animation ->
-                    val animatedValue = animation.animatedValue as Float
-                    val formattedValue = String.format("%.1f", animatedValue)
+                    val fraction = animation.animatedValue as Float
+                    // Manual Math to protect Billions
+                    val currentStep = startVal + (endVal - startVal) * fraction.toDouble()
+
+                    val formattedValue = if (currentStep % 1.0 == 0.0) {
+                        currentStep.toLong().toString()
+                    } else {
+                        String.format("%.1f", currentStep)
+                    }
                     binding.tvTotalBalance.text = "$symbol $formattedValue"
                 }
+
                 animator.start()
-                currentDisplayedBalance = total
+                balanceAnimator = animator // Store reference
+                currentDisplayedBalance = finalTotal // Update memory immediately
             } else {
-                val formattedValue = String.format("%.1f", total)
+                // No change, just set text
+                val formattedValue = if (finalTotal % 1.0 == 0.0) {
+                    finalTotal.toLong().toString()
+                } else {
+                    String.format("%.1f", finalTotal)
+                }
                 binding.tvTotalBalance.text = "$symbol $formattedValue"
             }
             binding.tvTotalBalance.setTextColor(android.graphics.Color.WHITE)
