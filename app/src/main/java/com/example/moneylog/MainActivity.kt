@@ -293,7 +293,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             resetInput()
-            runSync() // Trigger sync after adding/editing
+            runSync(force = true) // Trigger sync after adding/editing
 
         } else {
             // SEARCH MODE
@@ -305,11 +305,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- SYNC LOGIC (WORKMANAGER) ---
 
-    private fun runSync() {
-        // 1. Ask ViewModel to schedule the job
-        val workId = viewModel.scheduleSync()
+
+
+
+
+    private fun runSync(force: Boolean = false) {
+        // 1. Ask ViewModel to schedule the job with the flag
+        val workId = viewModel.scheduleSync(force)
 
         // 2. Observe the specific job status
         WorkManager.getInstance(this)
@@ -320,12 +323,10 @@ class MainActivity : AppCompatActivity() {
                         WorkInfo.State.SUCCEEDED -> {
                             val msg = workInfo.outputData.getString("MSG") ?: "Sync Complete"
 
-                            // Show toast only if something happened or it was an error
                             if (msg.contains("Synced") || msg.contains("Error")) {
                                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                             }
 
-                            // If sync brought new data, refresh ViewModel
                             if (msg.contains("Synced")) {
                                 viewModel.refreshData()
                             }
@@ -339,9 +340,7 @@ class MainActivity : AppCompatActivity() {
                         WorkInfo.State.RUNNING -> {
                             binding.swipeRefresh.isRefreshing = true
                         }
-                        else -> {
-                            // Enqueued or blocked
-                        }
+                        else -> { }
                     }
                 }
             }
@@ -387,6 +386,9 @@ class MainActivity : AppCompatActivity() {
                 var line = reader.readLine()
                 val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
 
+                // BUG FIX: Track timestamps used in this specific file to prevent ID collisions
+                val usedTimestamps = HashSet<Long>()
+
                 while (line != null) {
                     val parts = line.split(",")
                     if (parts.size >= 4) {
@@ -395,14 +397,24 @@ class MainActivity : AppCompatActivity() {
                         val desc = parts.subList(3, parts.size).joinToString(",").replace("\"", "")
 
                         val dateStr = "${parts[0]} ${parts[1]}"
-                        val timestamp = try {
+                        var timestamp = try {
                             dateFormat.parse(dateStr)?.time
                         } catch (e: Exception) {
                             System.currentTimeMillis()
                         } ?: System.currentTimeMillis()
 
+                        // CRITICAL FIX: Ensure uniqueness
+                        // If this exact millisecond is already used, keep adding 1ms until it's unique
+                        while (usedTimestamps.contains(timestamp)) {
+                            timestamp += 1
+                        }
+                        usedTimestamps.add(timestamp)
+
+                        // Cleanup formatting for the text (Remove .0 if integer)
+                        val fmtAmount = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+
                         importList.add(Transaction(
-                            originalText = "$amount $desc",
+                            originalText = "$fmtAmount $desc",
                             amount = amount,
                             description = desc,
                             timestamp = timestamp

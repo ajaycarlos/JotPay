@@ -18,10 +18,14 @@ class TransactionRepository(private val db: AppDatabase, private val syncManager
     }
 
     suspend fun delete(transaction: Transaction) {
-        // The Tombstone logic
-        syncManager.pushDelete(transaction)
-        // 2. Delete Locally
+        // 1. Queue the delete locally (so we remember it even if offline)
+        syncManager.queueDelete(transaction.timestamp)
+
+        // 2. Delete from Local DB immediately (Update UI)
         db.transactionDao().delete(transaction)
+
+        // 3. Schedule a sync to push this delete to server
+        syncManager.scheduleSync()
     }
 
     suspend fun checkDuplicate(amount: Double, desc: String, start: Long, end: Long): Int {

@@ -1,14 +1,11 @@
 package com.example.moneylog
 
 import android.content.Context
+import androidx.room.Room
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.google.firebase.database.FirebaseDatabase
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -21,34 +18,37 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        val data = androidx.work.workDataOf("FORCE_PUSH" to forcePush) // Pass flag
+        val data = androidx.work.workDataOf("FORCE_PUSH" to forcePush)
 
         val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(constraints)
-            .setInputData(data) // Attach data
+            .setInputData(data)
             .build()
 
         WorkManager.getInstance(context).enqueue(syncRequest)
         return syncRequest.id
     }
 
-    fun pushDelete(t: Transaction) {
-        val vaultId = prefs.getString("vault_id", null)
-        val secretKey = prefs.getString("secret_key", null) ?: return
-        if (vaultId == null) return
-
-        GlobalScope.launch(Dispatchers.IO) {
-            // Use the new STABLE ID (based on timestamp only)
-            val uniqueId = generateStableId(t.timestamp)
-            val ref = FirebaseDatabase.getInstance().getReference("vaults").child(vaultId)
-
-            ref.child("transactions").child(uniqueId).removeValue()
-            ref.child("deleted").child(uniqueId).setValue(System.currentTimeMillis())
-        }
+    // FIX: Instead of trying to delete immediately (which might fail),
+    // we just save the timestamp to a "Pending List" and let the Worker handle it.
+    fun queueDelete(timestamp: Long) {
+        val pending = getPendingDeletes().toMutableSet()
+        pending.add(timestamp.toString())
+        prefs.edit().putStringSet("pending_deletes", pending).apply()
     }
 
-    // New ID Logic: MD5(timestamp). Stable even if text changes.
-    private fun generateStableId(timestamp: Long): String {
+    fun getPendingDeletes(): MutableSet<String> {
+        return prefs.getStringSet("pending_deletes", mutableSetOf()) ?: mutableSetOf()
+    }
+
+    fun removePendingDelete(timestamp: Long) {
+        val pending = getPendingDeletes().toMutableSet()
+        pending.remove(timestamp.toString())
+        prefs.edit().putStringSet("pending_deletes", pending).apply()
+    }
+
+    // Helper to generate the Stable ID (used by Worker)
+    fun generateStableId(timestamp: Long): String {
         val input = "$timestamp"
         val md = MessageDigest.getInstance("MD5")
         val digest = md.digest(input.toByteArray())
