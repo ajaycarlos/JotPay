@@ -84,8 +84,13 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     fun importTransactionList(list: List<Transaction>) {
         viewModelScope.launch(Dispatchers.IO) {
             for(t in list) {
-                // Check dupes within 60 seconds
-                val count = repository.checkDuplicate(t.amount, t.description, t.timestamp, t.timestamp + 59999)
+                // BUG 5 FIX: Check both BEFORE and AFTER the timestamp (+/- 60 seconds)
+                // Previous logic only checked forward (t.timestamp + 59999), causing duplicates
+                // if the existing item was even 1 millisecond older.
+                val start = t.timestamp - 60000
+                val end = t.timestamp + 60000
+
+                val count = repository.checkDuplicate(t.amount, t.description, start, end)
                 if (count == 0) {
                     repository.insert(t)
                 }
