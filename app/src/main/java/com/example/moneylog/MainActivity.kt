@@ -137,40 +137,54 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // B. Watch for Balance changes (The Fix)
+        // B. Watch for Balance changes (Fixed with DoubleEvaluator)
         viewModel.totalBalance.observe(this) { total ->
-            val finalTotal = total ?: 0.0 // Safety check for null
+            val finalTotal = total ?: 0.0
             val symbol = CurrencyHelper.getSymbol(this)
 
-            // 1. ALWAYS Cancel any running animation to prevent conflicts
+            // 1. Cancel previous animation
             balanceAnimator?.cancel()
             balanceAnimator = null
 
-            // 2. Animate only if value changed significantly
+            // 2. Animate only if value changed
             if (currentDisplayedBalance != finalTotal) {
-                val startVal = currentDisplayedBalance
-                val endVal = finalTotal
-
-                val animator = ValueAnimator.ofFloat(0f, 1f)
+                // FIX: Use 'ofObject' with our custom DoubleEvaluator
+                // We MUST cast start/end to 'Any' or explicit Double to avoid crashes
+                val animator = ValueAnimator.ofObject(
+                    DoubleEvaluator(),
+                    currentDisplayedBalance,
+                    finalTotal
+                )
                 animator.duration = 500
-                animator.addUpdateListener { animation ->
-                    val fraction = animation.animatedValue as Float
-                    // Manual Math to protect Billions
-                    val currentStep = startVal + (endVal - startVal) * fraction.toDouble()
 
-                    val formattedValue = if (currentStep % 1.0 == 0.0) {
-                        currentStep.toLong().toString()
+                animator.addUpdateListener { animation ->
+                    val animatedValue = animation.animatedValue as Double
+
+                    val formattedValue = if (animatedValue % 1.0 == 0.0) {
+                        animatedValue.toLong().toString()
                     } else {
-                        String.format("%.1f", currentStep)
+                        String.format("%.1f", animatedValue)
                     }
                     binding.tvTotalBalance.text = "$symbol $formattedValue"
                 }
 
+                // Force exact value at the end (just in case)
+                animator.addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        val formattedValue = if (finalTotal % 1.0 == 0.0) {
+                            finalTotal.toLong().toString()
+                        } else {
+                            String.format("%.1f", finalTotal)
+                        }
+                        binding.tvTotalBalance.text = "$symbol $formattedValue"
+                    }
+                })
+
                 animator.start()
-                balanceAnimator = animator // Store reference
-                currentDisplayedBalance = finalTotal // Update memory immediately
+                balanceAnimator = animator
+                currentDisplayedBalance = finalTotal
             } else {
-                // No change, just set text
+                // No animation needed
                 val formattedValue = if (finalTotal % 1.0 == 0.0) {
                     finalTotal.toLong().toString()
                 } else {
@@ -924,5 +938,11 @@ class MainActivity : AppCompatActivity() {
                 if(isFirstLaunch) checkMonthlyCheckpoint()
             }
             .show()
+    }
+    // Add this Helper Class inside MainActivity
+    class DoubleEvaluator : android.animation.TypeEvaluator<Double> {
+        override fun evaluate(fraction: Float, startValue: Double, endValue: Double): Double {
+            return startValue + (endValue - startValue) * fraction.toDouble()
+        }
     }
 }
