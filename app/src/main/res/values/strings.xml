@@ -7,7 +7,7 @@ PRIVACY POLICY &amp; TERMS OF SERVICE
 Last Updated: January 2026
 \n\n
 1. INTRODUCTION\n
-Welcome to JotPay ("we," "our," or "us"). We are committed to protecting your privacy and ensuring the security of your financial data. This Privacy Policy explains how your information is collected, used, and stored when you use the JotPay mobile application.
+Welcome to JotPay. We are committed to protecting your privacy and ensuring the security of your financial data. This Privacy Policy explains how your information is collected, used, and stored when you use the JotPay mobile application.
 \n\n
 2. DATA COLLECTION AND STORAGE\n
 \n
@@ -17,7 +17,7 @@ JotPay operates on a "Local-First" basis. Your financial transaction logs, descr
 2.2. Cloud Synchronization (Optional)\n
 If you choose to use the "Link Device" feature, your data will be synchronized using Google Firebase Realtime Database.
 \n
-• Encryption: All data is encrypted using AES-128 standard on your device BEFORE it is transmitted. The cloud server receives and stores only encrypted strings.\n
+• Encryption: We use industry-standard AES-128 encryption (CBC Mode). Every transaction is encrypted with a unique, randomized Initialization Vector (IV), ensuring that your data remains private and unreadable to anyone else, including the developers.\n
 • Keys: The decryption keys are generated and stored solely on your devices. We cannot decrypt or view your financial data.\n
 • Retention: Data on the cloud serves strictly as a synchronization relay.
 \n\n
@@ -29,14 +29,18 @@ We request the minimum permissions necessary for functionality:\n
 4. DATA OWNERSHIP AND EXPORT\n
 You retain full ownership of your data. The application provides built-in tools to export your transaction history to CSV (Excel) or Text formats at any time. You may delete your data by clearing the application storage or uninstalling the application.
 \n\n
-5. THIRD-PARTY SERVICES\n
-We use Google Firebase solely for infrastructure purposes (database and hosting). We do not use third-party analytics, ad networks, or tracking pixels.
+5. THIRD-PARTY SERVICES &amp; DATA SAFETY\n
+We use Google Firebase to provide synchronization infrastructure. By using the sync feature, you acknowledge that third-party services may collect data used to identify your device for security and performance purposes.
+\n
+• Device Identifiers: We collect a unique Installation ID (UUID) to manage device linking and synchronization sessions.\n
+• App Performance: Firebase may collect diagnostic data (crash logs, performance metrics) to ensure service stability.\n
+\n
+For more information on how Google handles this data, please refer to the Google Privacy Policy (https://policies.google.com/privacy).
 \n\n
 6. CHANGES TO THIS POLICY\n
 We may update our Privacy Policy from time to time. You are advised to review this page periodically for any changes.
 \n\n
 7. CONTACT US\n
-If you have any questions about this Privacy Policy, please contact us via the support channels listed on our application page.
+If you have any questions about this Privacy Policy, please contact us via the support channel thecarlosdev@gmail.com.
     </string>
 </resources>
-

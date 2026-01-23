@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
 import java.security.MessageDigest
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -40,7 +41,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             val activePendingDeletes = syncManager.getPendingDeletes().mapNotNull { it.toLongOrNull() }.toSet()
 
-            // NEW: Get Pending Edits (Items modified offline)
+            // NEW: Get Pending Edits
             val pendingEdits = syncManager.getPendingEdits()
 
             // 1. Fetch Server Data
@@ -64,31 +65,43 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     changesCount++
                 } else {
                     // JSON Generation
-                    val jsonObject = org.json.JSONObject()
+                    val jsonObject = JSONObject()
                     jsonObject.put("o", t.originalText)
                     jsonObject.put("a", t.amount)
                     jsonObject.put("d", t.description)
                     jsonObject.put("t", t.timestamp)
 
-                    val encryptedData = EncryptionHelper.encrypt(jsonObject.toString(), secretKey)
-
                     // Conflict Check
                     var shouldPush = true
-
-                    // Check if this specific item was edited locally
                     val isPendingEdit = pendingEdits.contains(t.timestamp.toString())
 
                     if (serverSnapshot.hasChild(stableId)) {
-                        val serverVal = serverSnapshot.child(stableId).value.toString()
+                        val serverEncrypted = serverSnapshot.child(stableId).value.toString()
 
-                        if (serverVal == encryptedData) {
-                            // Identical content
+                        // FIX: Decrypt and compare VALUES, because Random IV means encrypted strings never match
+                        val serverJsonStr = EncryptionHelper.decrypt(serverEncrypted, secretKey)
+
+                        var isContentMatch = false
+                        if (serverJsonStr.isNotEmpty()) {
+                            try {
+                                val serverObj = JSONObject(serverJsonStr)
+                                val sText = serverObj.optString("o")
+                                val sAmt = serverObj.optDouble("a")
+                                val sDesc = serverObj.optString("d")
+
+                                // Precise check: If server data equals local data, we don't need to push
+                                if (sText == t.originalText && sAmt == t.amount && sDesc == t.description) {
+                                    isContentMatch = true
+                                }
+                            } catch (e: Exception) {}
+                        }
+
+                        if (isContentMatch) {
                             shouldPush = false
-                            // If it matches, we can clear the pending flag (it's safe)
+                            // Data matches, so any pending edit flag is now redundant/safe to clear
                             if (isPendingEdit) syncManager.removePendingEdit(t.timestamp)
                         } else {
                             // Content Differs.
-                            // Push IF: We are Forcing OR It is a Pending Edit (Offline change)
                             if (!forcePush && !isPendingEdit) {
                                 shouldPush = false // Server Wins (Standard Rule)
                             }
@@ -96,9 +109,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     }
 
                     if (shouldPush) {
+                        // We re-encrypt here. This generates a NEW Random IV every time.
+                        val encryptedData = EncryptionHelper.encrypt(jsonObject.toString(), secretKey)
                         ref.child("transactions").child(stableId).setValue(encryptedData)
                         pushedKeys.add(stableId)
-                        // Successful push intent -> Clear pending flag
                         if (isPendingEdit) syncManager.removePendingEdit(t.timestamp)
                     }
                 }
@@ -114,7 +128,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
                 if (jsonStr.isNotEmpty()) {
                     try {
-                        val jsonObject = org.json.JSONObject(jsonStr)
+                        val jsonObject = JSONObject(jsonStr)
                         val originalText = jsonObject.optString("o")
                         val amount = jsonObject.optDouble("a")
                         val desc = jsonObject.optString("d")
