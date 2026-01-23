@@ -18,8 +18,8 @@ android {
         // FIX: Updated to 35 to match compileSdk
         targetSdk = 35
 
-        versionCode = 42
-        versionName = "1.7.7"
+        versionCode = 43
+        versionName = "1.7.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

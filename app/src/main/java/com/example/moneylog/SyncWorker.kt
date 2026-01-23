@@ -17,8 +17,6 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val secretKey = prefs.getString("secret_key", null)
         val forcePush = inputData.getBoolean("FORCE_PUSH", false)
 
-        // FIX: If device is not linked, just return Success silently.
-        // Returning 'failure' caused the "Skipped: Device not linked" popup.
         if (vaultId == null || secretKey == null) {
             return Result.success()
         }
@@ -41,6 +39,9 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 } catch (e: Exception) { }
             }
             val activePendingDeletes = syncManager.getPendingDeletes().mapNotNull { it.toLongOrNull() }.toSet()
+
+            // NEW: Get Pending Edits (Items modified offline)
+            val pendingEdits = syncManager.getPendingEdits()
 
             // 1. Fetch Server Data
             val serverSnapshot = ref.child("transactions").get().await()
@@ -73,18 +74,32 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
                     // Conflict Check
                     var shouldPush = true
+
+                    // Check if this specific item was edited locally
+                    val isPendingEdit = pendingEdits.contains(t.timestamp.toString())
+
                     if (serverSnapshot.hasChild(stableId)) {
                         val serverVal = serverSnapshot.child(stableId).value.toString()
+
                         if (serverVal == encryptedData) {
+                            // Identical content
                             shouldPush = false
-                        } else if (!forcePush) {
-                            shouldPush = false
+                            // If it matches, we can clear the pending flag (it's safe)
+                            if (isPendingEdit) syncManager.removePendingEdit(t.timestamp)
+                        } else {
+                            // Content Differs.
+                            // Push IF: We are Forcing OR It is a Pending Edit (Offline change)
+                            if (!forcePush && !isPendingEdit) {
+                                shouldPush = false // Server Wins (Standard Rule)
+                            }
                         }
                     }
 
                     if (shouldPush) {
                         ref.child("transactions").child(stableId).setValue(encryptedData)
                         pushedKeys.add(stableId)
+                        // Successful push intent -> Clear pending flag
+                        if (isPendingEdit) syncManager.removePendingEdit(t.timestamp)
                     }
                 }
             }

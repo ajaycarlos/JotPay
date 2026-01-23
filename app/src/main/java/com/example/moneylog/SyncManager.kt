@@ -32,6 +32,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         return syncRequest.id
     }
 
+    // --- PENDING DELETES ---
     fun queueDelete(timestamp: Long) {
         val pending = getPendingDeletes().toMutableSet()
         pending.add(timestamp.toString())
@@ -48,14 +49,31 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         prefs.edit().putStringSet("pending_deletes", pending).apply()
     }
 
+    // --- NEW: PENDING EDITS (The Fix) ---
+    // Protects local edits from being overwritten by older server data
+    fun queueEdit(timestamp: Long) {
+        val pending = getPendingEdits().toMutableSet()
+        pending.add(timestamp.toString())
+        prefs.edit().putStringSet("pending_edits", pending).apply()
+    }
+
+    fun getPendingEdits(): MutableSet<String> {
+        return prefs.getStringSet("pending_edits", mutableSetOf()) ?: mutableSetOf()
+    }
+
+    fun removePendingEdit(timestamp: Long) {
+        val pending = getPendingEdits().toMutableSet()
+        pending.remove(timestamp.toString())
+        prefs.edit().putStringSet("pending_edits", pending).apply()
+    }
+
+    // --- HELPERS ---
     fun generateStableId(timestamp: Long): String {
         val input = "$timestamp"
         val md = MessageDigest.getInstance("MD5")
         val digest = md.digest(input.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
-
-    // --- NEW: Device Identity & Unlink Logic ---
 
     fun getInstallationId(): String {
         var id = prefs.getString("installation_id", null)
@@ -67,7 +85,6 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     }
 
     fun unlinkDevice() {
-        // Reset to a FRESH random vault, effectively "Unlinking" from the shared one
         val newVault = UUID.randomUUID().toString()
         val newKey = UUID.randomUUID().toString().substring(0, 16)
 
