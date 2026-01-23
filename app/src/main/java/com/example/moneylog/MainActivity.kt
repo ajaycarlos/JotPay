@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
         // 4. If setup is done, run the monthly check logic
         if (isSetupDone) {
             checkMonthlyCheckpoint()
+            checkBackupReminder()
         }
 
         // FIX: Handle Back Press to close Search
@@ -864,6 +865,14 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     startActivity(Intent.createChooser(intent, "Share Export"))
                 }
+
+                //RESET THE TIMER
+                getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putLong("last_backup_timestamp", System.currentTimeMillis())
+                    .apply()
+
+
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     showError("Export Failed: ${e.message}")
@@ -979,6 +988,29 @@ class MainActivity : AppCompatActivity() {
     class DoubleEvaluator : android.animation.TypeEvaluator<Double> {
         override fun evaluate(fraction: Float, startValue: Double, endValue: Double): Double {
             return startValue + (endValue - startValue) * fraction.toDouble()
+        }
+    }
+
+    private fun checkBackupReminder() {
+        val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
+        val lastReminded = prefs.getLong("last_backup_timestamp", 0L)
+        val now = System.currentTimeMillis()
+
+        // 7 Days in milliseconds = 604800000
+        val interval = 604800000L
+
+        if (now - lastReminded > interval) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Backup Reminder")
+                .setMessage("It's been a while since your last backup.\n\nTo prevent data loss, we recommend exporting your data to Google Drive or keeping a CSV copy safe.")
+                .setPositiveButton("Export Now") { _, _ ->
+                    showExportDialog()
+                }
+                .setNegativeButton("Remind Later") { _, _ ->
+                    // Reset timer so we don't nag them again immediately
+                    prefs.edit().putLong("last_backup_timestamp", now).apply()
+                }
+                .show()
         }
     }
 }

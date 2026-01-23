@@ -73,7 +73,15 @@ class LinkDeviceActivity : AppCompatActivity() {
 
         // Handle Unlink Button
         binding.btnUnlink.setOnClickListener {
-            unlinkThisDevice()
+            // SECURITY UPDATE: Confirmation Dialog
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Unlink Device?")
+                .setMessage("This will disconnect this phone from the sync vault.\n\nWARNING: If this is your only device, you will lose access to your encrypted cloud data permanently.")
+                .setPositiveButton("Unlink") { _, _ ->
+                    unlinkThisDevice()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
         }
     }
 
@@ -182,6 +190,16 @@ class LinkDeviceActivity : AppCompatActivity() {
                     val json = JSONObject(result.contents)
                     val scannedVault = json.getString("v")
                     val scannedKey = json.getString("k")
+
+                    // 1. Validate the key by trying to encrypt a dummy word
+                    try {
+                        val test = EncryptionHelper.encrypt("test", scannedKey)
+                        if (test.isEmpty()) throw Exception("Encryption failed")
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Error: Invalid or corrupted Key in QR Code", Toast.LENGTH_LONG).show()
+                        return
+                    }
+
 
                     val prefs = getSharedPreferences("jotpay_sync", Context.MODE_PRIVATE)
                     prefs.edit()
