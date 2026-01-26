@@ -264,12 +264,17 @@
         android:layout_gravity="start"
         android:background="@drawable/bg_drawer_surface"
         app:menu="@menu/drawer_menu"
+
         app:itemIconTint="@color/text_secondary"
         app:itemTextColor="@color/text_primary"
         app:subheaderColor="@color/text_tertiary"
+
         app:itemHorizontalPadding="24dp"
         app:itemIconPadding="24dp"
-        app:itemShapeFillColor="@color/drawer_ripple"
+
+        app:itemShapeFillColor="@android:color/transparent"
+        app:itemBackground="@null"
+
         app:elevation="0dp"
         android:paddingTop="32dp"/>
 
