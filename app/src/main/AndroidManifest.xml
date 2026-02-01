@@ -37,6 +37,8 @@
             android:name=".LinkDeviceActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
+
+        <activity android:name=".AssetsLiabilitiesActivity" />
     </application>
 
 </manifest>

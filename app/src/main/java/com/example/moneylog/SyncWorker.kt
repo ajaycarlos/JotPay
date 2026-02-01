@@ -41,7 +41,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
             val activePendingDeletes = syncManager.getPendingDeletes().mapNotNull { it.toLongOrNull() }.toSet()
 
-            // NEW: Get Pending Edits
+            // Get Pending Edits
             val pendingEdits = syncManager.getPendingEdits()
 
             // 1. Fetch Server Data
@@ -64,12 +64,14 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     db.transactionDao().delete(t)
                     changesCount++
                 } else {
-                    // JSON Generation
+                    // JSON Generation: UPDATED with Nature and Obligation
                     val jsonObject = JSONObject()
                     jsonObject.put("o", t.originalText)
                     jsonObject.put("a", t.amount)
                     jsonObject.put("d", t.description)
                     jsonObject.put("t", t.timestamp)
+                    jsonObject.put("n", t.nature) // NEW
+                    jsonObject.put("oa", t.obligationAmount) // NEW
 
                     // Conflict Check
                     var shouldPush = true
@@ -77,8 +79,6 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
                     if (serverSnapshot.hasChild(stableId)) {
                         val serverEncrypted = serverSnapshot.child(stableId).value.toString()
-
-                        // FIX: Decrypt and compare VALUES, because Random IV means encrypted strings never match
                         val serverJsonStr = EncryptionHelper.decrypt(serverEncrypted, secretKey)
 
                         var isContentMatch = false
@@ -88,9 +88,12 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                                 val sText = serverObj.optString("o")
                                 val sAmt = serverObj.optDouble("a")
                                 val sDesc = serverObj.optString("d")
+                                val sNature = serverObj.optString("n", "NORMAL") // NEW
+                                val sObligation = serverObj.optDouble("oa", 0.0) // NEW
 
-                                // Precise check: If server data equals local data, we don't need to push
-                                if (sText == t.originalText && sAmt == t.amount && sDesc == t.description) {
+                                // Precise check including new fields
+                                if (sText == t.originalText && sAmt == t.amount && sDesc == t.description
+                                    && sNature == t.nature && sObligation == t.obligationAmount) {
                                     isContentMatch = true
                                 }
                             } catch (e: Exception) {}
@@ -98,18 +101,15 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
                         if (isContentMatch) {
                             shouldPush = false
-                            // Data matches, so any pending edit flag is now redundant/safe to clear
                             if (isPendingEdit) syncManager.removePendingEdit(t.timestamp)
                         } else {
-                            // Content Differs.
                             if (!forcePush && !isPendingEdit) {
-                                shouldPush = false // Server Wins (Standard Rule)
+                                shouldPush = false // Server Wins
                             }
                         }
                     }
 
                     if (shouldPush) {
-                        // We re-encrypt here. This generates a NEW Random IV every time.
                         val encryptedData = EncryptionHelper.encrypt(jsonObject.toString(), secretKey)
                         ref.child("transactions").child(stableId).setValue(encryptedData)
                         pushedKeys.add(stableId)
@@ -133,6 +133,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                         val amount = jsonObject.optDouble("a")
                         val desc = jsonObject.optString("d")
                         val timestamp = jsonObject.optLong("t")
+                        val nature = jsonObject.optString("n", "NORMAL") // NEW
+                        val obligationAmount = jsonObject.optDouble("oa", 0.0) // NEW
 
                         if (activePendingDeletes.contains(timestamp)) continue
 
@@ -143,15 +145,21 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                                 originalText = originalText,
                                 amount = amount,
                                 description = desc,
-                                timestamp = timestamp
+                                timestamp = timestamp,
+                                nature = nature,
+                                obligationAmount = obligationAmount
                             ))
                             changesCount++
                         } else {
-                            if (existing.originalText != originalText || existing.amount != amount || existing.description != desc) {
+                            // Update check including new fields
+                            if (existing.originalText != originalText || existing.amount != amount ||
+                                existing.description != desc || existing.nature != nature) {
                                 val updated = existing.copy(
                                     originalText = originalText,
                                     amount = amount,
-                                    description = desc
+                                    description = desc,
+                                    nature = nature,
+                                    obligationAmount = obligationAmount
                                 )
                                 db.transactionDao().update(updated)
                                 changesCount++

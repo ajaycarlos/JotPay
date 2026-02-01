@@ -36,6 +36,19 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <ImageButton
+            android:id="@+id/btnAssetsLiabilities"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_compare_arrows"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:tint="@color/text_primary"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="Assets &amp; Liabilities"
+            app:layout_constraintTop_toBottomOf="@id/btnSearch"
+            app:layout_constraintEnd_toEndOf="parent" />
+
         <LinearLayout
             android:id="@+id/cardBalance"
             android:layout_width="0dp"
@@ -57,7 +70,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Net Balance"
+                android:text="Current Balance"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
                 android:textAllCaps="true"
@@ -112,7 +125,6 @@
             android:id="@+id/tvMonthlySummary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/income_muted"
             android:textSize="14sp"
             android:textStyle="italic"
             android:visibility="gone"
@@ -130,7 +142,6 @@
             app:layout_constraintTop_toBottomOf="@id/tvMonthlySummary"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-
             app:layout_constraintBottom_toTopOf="@id/layoutInput">
 
             <androidx.recyclerview.widget.RecyclerView
@@ -154,6 +165,20 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <TextView
+            android:id="@+id/tvInputPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="@color/text_secondary"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:paddingBottom="8dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/layoutSignToggles"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
         <LinearLayout
             android:id="@+id/layoutSignToggles"
             android:layout_width="wrap_content"
@@ -174,8 +199,8 @@
                 android:gravity="center"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/income_muted"
                 android:background="@drawable/bg_message_card"
+                android:textColor="@color/income_green"
                 android:layout_marginEnd="8dp"/>
 
             <TextView
@@ -186,8 +211,8 @@
                 android:gravity="center"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/expense_muted"
                 android:background="@drawable/bg_message_card"
+                android:textColor="@color/expense_red"
                 android:layout_marginEnd="8dp"/>
 
             <ImageButton
@@ -199,22 +224,7 @@
                 android:background="@drawable/bg_message_card"
                 app:tint="@color/text_secondary"
                 android:visibility="gone"/>
-
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/tvInputPreview"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="@color/text_secondary"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:paddingBottom="8dp"
-            android:visibility="gone"
-            app:layout_constraintBottom_toTopOf="@id/layoutSignToggles"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
 
         <LinearLayout
             android:id="@+id/layoutInput"
@@ -236,7 +246,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:background="@drawable/bg_message_card"
-                android:hint="Try '+7000 Freelance Gigs'"
+                android:hint="Try '+7000 Freelance'"
                 android:inputType="textCapSentences|textMultiLine"
                 android:completionThreshold="1"
                 android:maxLines="4"
@@ -249,6 +259,7 @@
                 android:textSize="16sp"
                 android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_tertiary"/>
+
             <ImageButton
                 android:id="@+id/btnCancelEdit"
                 android:layout_width="48dp"
@@ -266,7 +277,8 @@
                 android:background="@drawable/bg_send_button"
                 android:src="@drawable/baseline_send_24"
                 app:tint="@color/text_primary"
-                android:scaleType="centerInside" />
+                android:scaleType="centerInside"
+                android:tooltipText="Hold to add Asset/Liability"/>
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

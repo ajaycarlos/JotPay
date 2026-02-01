@@ -15,16 +15,30 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
 
     private val repository: TransactionRepository
 
-
     private val _transactions = MutableLiveData<List<Transaction>>()
     val transactions: LiveData<List<Transaction>> = _transactions
 
     private val _totalBalance = MutableLiveData<Double>()
     val totalBalance: LiveData<Double> = _totalBalance
 
-    // Using AndroidViewModel gives us access to 'application' context for DB init
+    // NEW: Assets & Liabilities LiveData
+    private val _assets = MutableLiveData<List<Transaction>>()
+    val assets: LiveData<List<Transaction>> = _assets
+
+    private val _liabilities = MutableLiveData<List<Transaction>>()
+    val liabilities: LiveData<List<Transaction>> = _liabilities
+
+    private val _totalAssets = MutableLiveData<Double>()
+    val totalAssets: LiveData<Double> = _totalAssets
+
+    private val _totalLiabilities = MutableLiveData<Double>()
+    val totalLiabilities: LiveData<Double> = _totalLiabilities
+
     init {
-        val db = Room.databaseBuilder(application, AppDatabase::class.java, "moneylog-db").build()
+        // Initialize DB with Migration Strategy
+        val db = Room.databaseBuilder(application, AppDatabase::class.java, "moneylog-db")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
         val syncManager = SyncManager(application, db)
         repository = TransactionRepository(db, syncManager)
 
@@ -44,16 +58,45 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun addTransaction(originalText: String, amount: Double, desc: String) {
+    // UPDATED: Added 'nature' parameter and Settlement Logic
+    fun addTransaction(originalText: String, amount: Double, desc: String, nature: String) {
         viewModelScope.launch(Dispatchers.IO) {
+
+            // SETTLEMENT MATH:
+            // If Nature is Asset/Liability, the Obligation is the INVERSE of the cash flow.
+            // Example 1 (Lending): Cash -500. Obligation +500 (Owed to you).
+            // Example 2 (Repayment): Cash +200. Obligation -200 (Reduces what is owed).
+            val obligation = when (nature) {
+                "ASSET", "LIABILITY" -> -amount
+                else -> 0.0
+            }
+
             val t = Transaction(
                 originalText = originalText,
                 amount = amount,
                 description = desc,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                nature = nature,
+                obligationAmount = obligation
             )
             repository.insert(t)
             refreshData()
+        }
+    }
+
+    fun loadAssetsAndLiabilities() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val assetList = repository.getAssets()
+            val liabilityList = repository.getLiabilities()
+            val assetTotal = repository.getTotalAssets()
+            val liabilityTotal = repository.getTotalLiabilities()
+
+            withContext(Dispatchers.Main) {
+                _assets.value = assetList
+                _liabilities.value = liabilityList
+                _totalAssets.value = assetTotal ?: 0.0
+                _totalLiabilities.value = liabilityTotal ?: 0.0
+            }
         }
     }
 
@@ -74,9 +117,6 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     fun search(query: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val results = repository.search(query)
-
-            // BUG 6 FIX: Calculate the balance of the SEARCH RESULTS
-            // Previously, the balance remained at the global total, which was confusing.
             val searchTotal = results.sumOf { it.amount }
 
             withContext(Dispatchers.Main) {
@@ -89,12 +129,8 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     fun importTransactionList(list: List<Transaction>) {
         viewModelScope.launch(Dispatchers.IO) {
             for(t in list) {
-                // BUG 5 FIX: Check both BEFORE and AFTER the timestamp (+/- 60 seconds)
-                // Previous logic only checked forward (t.timestamp + 59999), causing duplicates
-                // if the existing item was even 1 millisecond older.
                 val start = t.timestamp - 60000
                 val end = t.timestamp + 60000
-
                 val count = repository.checkDuplicate(t.amount, t.description, start, end)
                 if (count == 0) {
                     repository.insert(t)
@@ -104,7 +140,6 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    // Returns the Work ID so the View can observe the Status
     fun scheduleSync(forcePush: Boolean = false): UUID {
         return repository.scheduleSync(forcePush)
     }

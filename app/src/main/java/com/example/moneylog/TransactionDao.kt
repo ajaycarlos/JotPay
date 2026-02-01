@@ -36,5 +36,17 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE timestamp = :timestamp LIMIT 1")
     suspend fun getByTimestamp(timestamp: Long): Transaction?
 
+    @Query("SELECT * FROM transactions WHERE nature = 'ASSET' ORDER BY timestamp DESC")
+    suspend fun getAssets(): List<Transaction>
+
+    @Query("SELECT * FROM transactions WHERE nature = 'LIABILITY' ORDER BY timestamp DESC")
+    suspend fun getLiabilities(): List<Transaction>
+
+    @Query("SELECT SUM(obligationAmount) FROM transactions WHERE nature = 'ASSET'")
+    suspend fun getTotalAssets(): Double?
+
+    @Query("SELECT SUM(obligationAmount) FROM transactions WHERE nature = 'LIABILITY'")
+    suspend fun getTotalLiabilities(): Double?
+
 
 }

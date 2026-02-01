@@ -12,9 +12,11 @@ import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
@@ -39,17 +41,13 @@ import kotlin.math.abs
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-
-    // MVVM: The ViewModel now handles DB and Sync logic
     private val viewModel: TransactionViewModel by viewModels()
-
     private lateinit var adapter: TransactionAdapter
     private var editingTransaction: Transaction? = null
     private var pendingEditId: Long = 0L
     private var balanceAnimator: ValueAnimator? = null
     private var currentDisplayedBalance = 0.0
 
-    // Launcher for Importing CSV
     private val importLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { parseAndImportCsv(it) }
     }
@@ -63,26 +61,21 @@ class MainActivity : AppCompatActivity() {
             pendingEditId = savedInstanceState.getLong("editing_id", 0L)
         }
 
-        // 1. Setup UI Components
         setupRecyclerView()
         setupListeners()
         setupInputLogic()
 
-        // 2. Check if user has finished Setup (Privacy + Currency)
         val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
         val isSetupDone = prefs.getBoolean("policy_accepted", false) && CurrencyHelper.isCurrencySet(this)
 
-        // 3. Start observing data from ViewModel
         observeViewModel()
 
-        // 4. If setup is done, run the monthly check logic
         if (isSetupDone) {
             checkMonthlyCheckpoint()
             checkBackupReminder()
         }
 
-        // FIX: Handle Back Press to close Search
-        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.etSearch.visibility == View.VISIBLE) {
                     closeSearchBar()
@@ -94,24 +87,17 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Helper to close search and hide keyboard
     private fun closeSearchBar() {
         binding.etSearch.text.clear()
         binding.etSearch.visibility = View.GONE
-        binding.btnCloseSearch.visibility = View.GONE // Hide the X button
-
-        // Hide Keyboard
+        binding.btnCloseSearch.visibility = View.GONE
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(binding.etSearch.windowToken, 0)
-
-        viewModel.refreshData() // Reset list to show all items
+        viewModel.refreshData()
     }
 
     override fun onResume() {
         super.onResume()
-        // BUG 8 FIX: Removed aggressive resetInput().
-        // Previously, switching apps (e.g. to Calculator) killed your edit session.
-
         val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("policy_accepted", false)) {
             checkFirstLaunchFlow()
@@ -123,32 +109,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        // BUG 8 FIX: Save the ID of the transaction we are editing
-        // so we can restore it after rotation.
         editingTransaction?.let {
             outState.putLong("editing_id", it.timestamp)
         }
     }
 
-    // --- MVVM OBSERVATION ---
-
     private fun observeViewModel() {
-        // A. Watch for Transaction List changes
         viewModel.transactions.observe(this) { list ->
             adapter.updateData(list)
             updateAutocomplete(list)
 
-            // --- BUG 8 FIX: Restore Edit Mode after rotation ---
-            // If we have a pending edit ID (saved from onCreate), find that transaction
-            // and restart the edit session automatically.
             if (pendingEditId != 0L) {
                 val target = list.find { it.timestamp == pendingEditId }
                 if (target != null) {
                     startEditing(target)
-                    pendingEditId = 0L // Clear it so we don't do this again
+                    pendingEditId = 0L
                 }
             }
-            // ---------------------------------------------------
 
             if (list.isEmpty()) {
                 binding.tvEmptyState.text = "Type +500 salary or -40 bus to begin"
@@ -160,61 +137,37 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // B. Watch for Balance changes (Fixed with DoubleEvaluator)
         viewModel.totalBalance.observe(this) { total ->
             val finalTotal = total ?: 0.0
             val symbol = CurrencyHelper.getSymbol(this)
 
-            // 1. Cancel previous animation
             balanceAnimator?.cancel()
             balanceAnimator = null
 
-            // 2. Animate only if value changed
             if (currentDisplayedBalance != finalTotal) {
-                val animator = ValueAnimator.ofObject(
-                    DoubleEvaluator(),
-                    currentDisplayedBalance,
-                    finalTotal
-                )
+                val animator = ValueAnimator.ofObject(DoubleEvaluator(), currentDisplayedBalance, finalTotal)
                 animator.duration = 500
-
                 animator.addUpdateListener { animation ->
                     val animatedValue = animation.animatedValue as Double
-                    val formattedValue = if (animatedValue % 1.0 == 0.0) {
-                        animatedValue.toLong().toString()
-                    } else {
-                        String.format("%.1f", animatedValue)
-                    }
+                    val formattedValue = if (animatedValue % 1.0 == 0.0) animatedValue.toLong().toString() else String.format("%.1f", animatedValue)
                     binding.tvTotalBalance.text = "$symbol $formattedValue"
                 }
-
                 animator.addListener(object : android.animation.AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: android.animation.Animator) {
-                        val formattedValue = if (finalTotal % 1.0 == 0.0) {
-                            finalTotal.toLong().toString()
-                        } else {
-                            String.format("%.1f", finalTotal)
-                        }
+                        val formattedValue = if (finalTotal % 1.0 == 0.0) finalTotal.toLong().toString() else String.format("%.1f", finalTotal)
                         binding.tvTotalBalance.text = "$symbol $formattedValue"
                     }
                 })
-
                 animator.start()
                 balanceAnimator = animator
                 currentDisplayedBalance = finalTotal
             } else {
-                val formattedValue = if (finalTotal % 1.0 == 0.0) {
-                    finalTotal.toLong().toString()
-                } else {
-                    String.format("%.1f", finalTotal)
-                }
+                val formattedValue = if (finalTotal % 1.0 == 0.0) finalTotal.toLong().toString() else String.format("%.1f", finalTotal)
                 binding.tvTotalBalance.text = "$symbol $formattedValue"
             }
             binding.tvTotalBalance.setTextColor(android.graphics.Color.WHITE)
         }
     }
-
-    // --- UI SETUP ---
 
     private fun setupRecyclerView() {
         adapter = TransactionAdapter(emptyList()) { transaction ->
@@ -227,31 +180,83 @@ class MainActivity : AppCompatActivity() {
     private fun setupListeners() {
         binding.swipeRefresh.setProgressBackgroundColorSchemeColor(android.graphics.Color.TRANSPARENT)
         binding.swipeRefresh.setColorSchemeColors(android.graphics.Color.parseColor("#81C784"))
-        binding.swipeRefresh.setOnRefreshListener {
-            runSync()
-        }
+        binding.swipeRefresh.setOnRefreshListener { runSync() }
 
-        // Send Button
+        // 1. STANDARD CLICK -> Normal Transaction
         binding.btnSend.setOnClickListener {
-            handleInput()
+            handleInput(nature = "NORMAL")
         }
 
-        // Drawer Menu
+        // 2. LONG CLICK -> Custom Tiny Popup (Bubble)
+        binding.btnSend.setOnLongClickListener { anchor ->
+            // A. Build the layout programmatically
+            val container = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                background = ContextCompat.getDrawable(context, R.drawable.bg_message_card)
+                setPadding(0, 12, 0, 12)
+                elevation = 24f
+            }
+
+            // B. Create the Popup Window
+            val popup = android.widget.PopupWindow(
+                container,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                true
+            )
+            popup.elevation = 24f
+
+            // C. Helper to create the text rows
+            fun createRow(text: String, colorRes: Int, nature: String) {
+                val tv = android.widget.TextView(this).apply {
+                    this.text = text
+                    textSize = 14f
+                    setTextColor(ContextCompat.getColor(context, colorRes))
+                    setPadding(48, 20, 48, 20)
+                    setOnClickListener {
+                        handleInput(nature)
+                        popup.dismiss()
+                    }
+                }
+                container.addView(tv)
+            }
+
+            // D. Add Options
+            createRow("Asset", R.color.income_green, "ASSET")
+            createRow("Liability", R.color.expense_red, "LIABILITY")
+
+            // E. Calculate Position (Force it ABOVE the button)
+            container.measure(
+                android.view.View.MeasureSpec.UNSPECIFIED,
+                android.view.View.MeasureSpec.UNSPECIFIED
+            )
+            val popupHeight = container.measuredHeight
+            val popupWidth = container.measuredWidth
+            val xOff = -(popupWidth - anchor.width) / 2
+            val yOff = -(anchor.height + popupHeight + 16)
+
+            popup.showAsDropDown(anchor, xOff, yOff)
+
+            true
+        }
+
         binding.btnMenu.setOnClickListener {
             binding.drawerLayout.openDrawer(GravityCompat.START)
         }
 
-        // Click Balance -> Show Summary
         binding.cardBalance.setOnClickListener {
             showSummarySheet()
         }
 
-        // Cancel Edit
         binding.btnCancelEdit.setOnClickListener {
             resetInput()
         }
 
-        // Navigation Items - FIX APPLIED HERE
+        // FIX: Open Assets & Liabilities Screen
+        binding.btnAssetsLiabilities.setOnClickListener {
+            startActivity(Intent(this, AssetsLiabilitiesActivity::class.java))
+        }
+
         binding.navView.setNavigationItemSelectedListener { menuItem ->
             binding.drawerLayout.closeDrawer(GravityCompat.START)
             when (menuItem.itemId) {
@@ -267,19 +272,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- INPUT HANDLING ---
-
-    private fun handleInput() {
+    private fun handleInput(nature: String) {
         val rawText = binding.etInput.text.toString().trim()
-
-        // 1. Use Smart Parser to check for valid money input
         val parsed = parseTransactionInput(rawText)
 
         if (parsed != null) {
-            // --- VALID TRANSACTION DETECTED ---
             val (amount, desc) = parsed
 
-            // Normalize: Always store as "50 Desc"
             val finalRawText = if (amount % 1.0 == 0.0) {
                 "${amount.toLong()} $desc"
             } else {
@@ -290,7 +289,7 @@ class MainActivity : AppCompatActivity() {
 
             if (editingTransaction == null) {
                 // ADD NEW
-                viewModel.addTransaction(finalRawText, amount, desc)
+                viewModel.addTransaction(finalRawText, amount, desc, nature)
                 binding.rvTransactions.scrollToPosition(0)
             } else {
                 // UPDATE EXISTING
@@ -300,6 +299,8 @@ class MainActivity : AppCompatActivity() {
                     amount = amount,
                     description = desc
                 )
+                // Note: Nature update on edit is not implemented in this simplified flow
+                // to avoid complex reconciliation logic. Use Delete & Re-add if nature is wrong.
                 viewModel.updateTransaction(updated)
                 showError("Updated")
             }
@@ -308,17 +309,13 @@ class MainActivity : AppCompatActivity() {
             runSync(force = true)
 
         } else {
-            // --- INVALID INPUT (No number found) ---
-            // Do NOT search. Do NOT query. Just show guidance.
             showError("Please enter an amount (e.g., '50 Coffee')")
         }
     }
 
-    // Helper: Checks for a number at the START ("50 Coffee") or END ("Coffee 50")
     private fun parseTransactionInput(text: String): Pair<Double, String>? {
         if (text.isBlank()) return null
 
-        // 1. Try Standard Format: "50 Coffee" (Amount at Start)
         val splitFirst = text.split(" ", limit = 2)
         val firstPart = splitFirst[0]
         val firstEval = evaluateMath(firstPart) ?: firstPart.toDoubleOrNull()
@@ -328,7 +325,6 @@ class MainActivity : AppCompatActivity() {
             return Pair(firstEval, desc)
         }
 
-        // 2. Try Reverse Format: "Coffee 50" (Amount at End)
         val lastSpace = text.lastIndexOf(' ')
         if (lastSpace != -1) {
             val lastPart = text.substring(lastSpace + 1)
@@ -340,52 +336,31 @@ class MainActivity : AppCompatActivity() {
                 return Pair(lastEval, desc)
             }
         }
-
         return null
     }
 
-
-
-
-
-
     private fun runSync(force: Boolean = false) {
-        // 1. Ask ViewModel to schedule the job with the flag
         val workId = viewModel.scheduleSync(force)
-
-        // 2. Observe the specific job status
-        WorkManager.getInstance(this)
-            .getWorkInfoByIdLiveData(workId)
-            .observe(this) { workInfo ->
-                if (workInfo != null) {
-                    when (workInfo.state) {
-                        WorkInfo.State.SUCCEEDED -> {
-                            val msg = workInfo.outputData.getString("MSG") ?: "Sync Complete"
-
-                            if (msg.contains("Synced") || msg.contains("Error")) {
-                                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                            }
-
-                            if (msg.contains("Synced")) {
-                                viewModel.refreshData()
-                            }
-                            binding.swipeRefresh.isRefreshing = false
-                        }
-                        WorkInfo.State.FAILED -> {
-                            val msg = workInfo.outputData.getString("MSG") ?: "Sync Failed"
-                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                            binding.swipeRefresh.isRefreshing = false
-                        }
-                        WorkInfo.State.RUNNING -> {
-                            binding.swipeRefresh.isRefreshing = true
-                        }
-                        else -> { }
+        WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId).observe(this) { workInfo ->
+            if (workInfo != null) {
+                when (workInfo.state) {
+                    WorkInfo.State.SUCCEEDED -> {
+                        val msg = workInfo.outputData.getString("MSG") ?: "Sync Complete"
+                        if (msg.contains("Synced") || msg.contains("Error")) Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                        if (msg.contains("Synced")) viewModel.refreshData()
+                        binding.swipeRefresh.isRefreshing = false
                     }
+                    WorkInfo.State.FAILED -> {
+                        val msg = workInfo.outputData.getString("MSG") ?: "Sync Failed"
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                        binding.swipeRefresh.isRefreshing = false
+                    }
+                    WorkInfo.State.RUNNING -> binding.swipeRefresh.isRefreshing = true
+                    else -> { }
                 }
             }
+        }
     }
-
-
 
     private fun deleteTransaction(transaction: Transaction) {
         viewModel.deleteTransaction(transaction)
@@ -399,18 +374,13 @@ class MainActivity : AppCompatActivity() {
                 val inputStream = contentResolver.openInputStream(uri)
                 val reader = BufferedReader(InputStreamReader(inputStream))
                 val importList = ArrayList<Transaction>()
-
-                // Read Header
-                val header = reader.readLine() // "Date,Time,Amount,Description,Timestamp"
+                reader.readLine() // Header
 
                 var line = reader.readLine()
                 val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                 val usedTimestamps = HashSet<Long>()
 
                 while (line != null) {
-                    // BUG 7 FIX: Proper CSV Regex splitting
-                    // This handles "Comma in quotes" and "Empty fields" correctly
-                    // It produces list of tokens, stripping wrapping quotes
                     val tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
                         .map { it.trim().removeSurrounding("\"").replace("\"\"", "\"") }
 
@@ -418,16 +388,14 @@ class MainActivity : AppCompatActivity() {
                         val dateStr = "${tokens[0]} ${tokens[1]}"
                         val amount = tokens[2].toDoubleOrNull() ?: 0.0
                         val desc = tokens[3]
-
-                        // TIMESTAMP RESTORATION LOGIC
                         var timestamp: Long = 0L
 
-                        // 1. Try reading the new 'Timestamp' column (Index 4)
-                        if (tokens.size >= 5 && tokens[4].toLongOrNull() != null) {
+                        if (tokens.size >= 7) { // Support new format with 7 columns
+                            if (tokens[6].toLongOrNull() != null) timestamp = tokens[6].toLong()
+                        } else if (tokens.size >= 5 && tokens[4].toLongOrNull() != null) {
                             timestamp = tokens[4].toLong()
                         }
 
-                        // 2. Fallback: Parse Date String (for old backups)
                         if (timestamp == 0L) {
                             timestamp = try {
                                 dateFormat.parse(dateStr)?.time
@@ -435,12 +403,11 @@ class MainActivity : AppCompatActivity() {
                                 System.currentTimeMillis()
                             } ?: System.currentTimeMillis()
                         }
-
-                        // 3. Collision Check (From Bug 1)
-                        while (usedTimestamps.contains(timestamp)) {
-                            timestamp += 1
-                        }
+                        while (usedTimestamps.contains(timestamp)) timestamp += 1
                         usedTimestamps.add(timestamp)
+
+                        val nature = if (tokens.size >= 5) tokens[4] else "NORMAL"
+                        val obligation = if (tokens.size >= 6) tokens[5].toDoubleOrNull() ?: 0.0 else 0.0
 
                         val fmtAmount = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
 
@@ -448,27 +415,20 @@ class MainActivity : AppCompatActivity() {
                             originalText = "$fmtAmount $desc",
                             amount = amount,
                             description = desc,
-                            timestamp = timestamp
+                            timestamp = timestamp,
+                            nature = nature,
+                            obligationAmount = obligation
                         ))
                     }
                     line = reader.readLine()
                 }
-
                 viewModel.importTransactionList(importList)
-
-                withContext(Dispatchers.Main) {
-                    showError("Importing ${importList.size} items...")
-                }
-
+                withContext(Dispatchers.Main) { showError("Importing ${importList.size} items...") }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    showError("Import Failed: ${e.message}")
-                }
+                withContext(Dispatchers.Main) { showError("Import Failed: ${e.message}") }
             }
         }
     }
-
-    // --- UI HELPERS (Unchanged Logic) ---
 
     private fun setupInputLogic() {
         setupSearch()
@@ -478,33 +438,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
-        // Search Icon Click: NOW ONLY OPENS
         binding.btnSearch.setOnClickListener {
             if (binding.etSearch.visibility != View.VISIBLE) {
-                // Open Search
                 binding.etSearch.visibility = View.VISIBLE
-                binding.btnCloseSearch.visibility = View.VISIBLE // Show X button
+                binding.btnCloseSearch.visibility = View.VISIBLE
                 binding.etSearch.requestFocus()
-
                 val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                 imm.showSoftInput(binding.etSearch, InputMethodManager.SHOW_IMPLICIT)
             }
         }
-
-        // "X" Button Click: CLOSES Search
-        binding.btnCloseSearch.setOnClickListener {
-            closeSearchBar()
-        }
-
-        // Text Watcher
+        binding.btnCloseSearch.setOnClickListener { closeSearchBar() }
         binding.etSearch.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
                 val query = s.toString().trim()
-                if (query.isNotEmpty()) {
-                    viewModel.search(query)
-                } else {
-                    viewModel.refreshData()
-                }
+                if (query.isNotEmpty()) viewModel.search(query) else viewModel.refreshData()
             }
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -514,16 +461,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupSignToggles() {
         binding.btnPlus.setOnClickListener { insertSign("+") }
         binding.btnMinus.setOnClickListener { insertSign("-") }
-
-        // Updated to handle the ImageButton
-        binding.btnSpace.setOnClickListener {
-            insertSign(" ")
-            // The visibility logic below will automatically hide the bar
-            // because the text now contains a space.
-        }
-
+        binding.btnSpace.setOnClickListener { insertSign(" ") }
         binding.etInput.setOnFocusChangeListener { _, _ -> updateSignToggleVisibility() }
-        // Ensure we check visibility immediately
         updateSignToggleVisibility()
     }
 
@@ -531,60 +470,38 @@ class MainActivity : AppCompatActivity() {
         binding.etInput.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(binding.etInput, InputMethodManager.SHOW_IMPLICIT)
-
         val start = binding.etInput.selectionStart.coerceAtLeast(0)
         binding.etInput.text.insert(start, sign)
     }
 
     private fun updateSignToggleVisibility() {
         val text = binding.etInput.text.toString()
-
-        // Logic: Is this a transaction start (numeric) that hasn't moved to description yet?
-        val isNumericMode = (text.startsWith("+") || text.startsWith("-") || text.firstOrNull()?.isDigit() == true)
-                && !text.contains(" ")
-
-        // Rule: Show if empty (Idle) OR if in Numeric Mode
+        val isNumericMode = (text.startsWith("+") || text.startsWith("-") || text.firstOrNull()?.isDigit() == true) && !text.contains(" ")
         val shouldShowBar = text.isEmpty() || isNumericMode
 
         if (shouldShowBar) {
-            // FADE IN
             if (binding.layoutSignToggles.visibility != View.VISIBLE) {
                 binding.layoutSignToggles.alpha = 0f
                 binding.layoutSignToggles.visibility = View.VISIBLE
-                binding.layoutSignToggles.animate()
-                    .alpha(1f)
-                    .setDuration(150)
-                    .withEndAction(null) // Clear any old end actions
-                    .start()
+                binding.layoutSignToggles.animate().alpha(1f).setDuration(150).withEndAction(null).start()
             } else {
-                // Ensure it's fully visible if we cancelled a fade-out
                 binding.layoutSignToggles.alpha = 1f
             }
 
-            // Manage Button Visibility inside the bar
             if (text.isEmpty()) {
-                // IDLE: Show +/- only
                 binding.btnPlus.visibility = View.VISIBLE
                 binding.btnMinus.visibility = View.VISIBLE
                 binding.btnSpace.visibility = View.GONE
             } else {
-                // NUMERIC: Show +/- and Space
                 binding.btnPlus.visibility = View.VISIBLE
                 binding.btnMinus.visibility = View.VISIBLE
                 binding.btnSpace.visibility = View.VISIBLE
             }
-
         } else {
-            // FADE OUT & GONE
             if (binding.layoutSignToggles.visibility == View.VISIBLE && binding.layoutSignToggles.alpha == 1f) {
-                binding.layoutSignToggles.animate()
-                    .alpha(0f)
-                    .setDuration(150)
-                    .withEndAction {
-                        // CRITICAL: This removes the box completely from layout
-                        binding.layoutSignToggles.visibility = View.GONE
-                    }
-                    .start()
+                binding.layoutSignToggles.animate().alpha(0f).setDuration(150).withEndAction {
+                    binding.layoutSignToggles.visibility = View.GONE
+                }.start()
             }
         }
     }
@@ -595,30 +512,20 @@ class MainActivity : AppCompatActivity() {
                 val text = s.toString()
                 val isTransactionStart = text.startsWith("+") || text.startsWith("-")
                 val hasSpace = text.contains(" ")
-
                 val typeText = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                val typeNumeric = InputType.TYPE_CLASS_DATETIME // Shows numbers + operators
-
+                val typeNumeric = InputType.TYPE_CLASS_DATETIME
                 val targetType = if (isTransactionStart && !hasSpace) typeNumeric else typeText
 
                 if (binding.etInput.inputType != targetType) {
                     val selStart = binding.etInput.selectionStart
                     val selEnd = binding.etInput.selectionEnd
                     binding.etInput.inputType = targetType
-                    // Restore cursor
-                    if (selStart >= 0 && selEnd >= 0) {
-                        binding.etInput.setSelection(selStart, selEnd)
-                    }
+                    if (selStart >= 0 && selEnd >= 0) binding.etInput.setSelection(selStart, selEnd)
                 }
 
-                // Hints
-                if (text.isEmpty()) {
-                    binding.etInput.hint = "Try '-50 coffee'"
-                } else if (isTransactionStart && !hasSpace) {
-                    binding.etInput.hint = "Amount (supports + - * /)"
-                } else {
-                    binding.etInput.hint = "Description"
-                }
+                if (text.isEmpty()) binding.etInput.hint = "Try '-50 coffee'"
+                else if (isTransactionStart && !hasSpace) binding.etInput.hint = "Amount (supports + - * /)"
+                else binding.etInput.hint = "Description"
             }
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -627,7 +534,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateAutocomplete(list: List<Transaction>) {
         val frequencyMap = HashMap<String, HashMap<String, Int>>()
-
         for (t in list) {
             val amountStr = if (t.amount % 1.0 == 0.0) t.amount.toLong().toString() else t.amount.toString()
             val map = frequencyMap.getOrDefault(amountStr, HashMap())
@@ -635,15 +541,11 @@ class MainActivity : AppCompatActivity() {
             map[t.description] = count + 1
             frequencyMap[amountStr] = map
         }
-
         val suggestions = ArrayList<String>()
         for ((amount, descMap) in frequencyMap) {
             val topDesc = descMap.maxByOrNull { it.value }
-            if (topDesc != null && topDesc.value >= 2) {
-                suggestions.add("$amount ${topDesc.key}")
-            }
+            if (topDesc != null && topDesc.value >= 2) suggestions.add("$amount ${topDesc.key}")
         }
-
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, suggestions)
         binding.etInput.setAdapter(adapter)
     }
@@ -651,23 +553,17 @@ class MainActivity : AppCompatActivity() {
     private fun evaluateMath(expression: String): Double? {
         try {
             if (!expression.matches(Regex("[-+*/.0-9]+"))) return null
-
-            // Custom parser for "50+20-10"
             val tokens = ArrayList<String>()
             var buffer = StringBuilder()
-
             for (char in expression) {
                 if (char in listOf('+', '-', '*', '/')) {
                     if (buffer.isNotEmpty()) tokens.add(buffer.toString())
                     tokens.add(char.toString())
                     buffer.clear()
-                } else {
-                    buffer.append(char)
-                }
+                } else buffer.append(char)
             }
             if (buffer.isNotEmpty()) tokens.add(buffer.toString())
 
-            // Handle Unary (e.g., "-50")
             var i = 0
             while (i < tokens.size) {
                 val token = tokens[i]
@@ -680,8 +576,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 i++
             }
-
-            // Multiplication / Division
             i = 0
             while (i < tokens.size) {
                 if (tokens[i] == "*" || tokens[i] == "/") {
@@ -691,14 +585,11 @@ class MainActivity : AppCompatActivity() {
                     val next = tokens[i + 1].toDouble()
                     val res = if (op == "*") prev * next else prev / next
                     tokens[i - 1] = res.toString()
-                    tokens.removeAt(i)
-                    tokens.removeAt(i)
+                    tokens.removeAt(i); tokens.removeAt(i)
                     i--
                 }
                 i++
             }
-
-            // Addition / Subtraction
             if (tokens.isEmpty()) return null
             var result = tokens[0].toDouble()
             i = 1
@@ -711,26 +602,21 @@ class MainActivity : AppCompatActivity() {
                 i += 2
             }
             return result
-        } catch (e: Exception) {
-            return null
-        }
+        } catch (e: Exception) { return null }
     }
 
     private fun setupInputPreview() {
         binding.etInput.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
                 updateSignToggleVisibility()
-
                 val text = s.toString().trim()
                 if (text.isEmpty()) {
                     binding.tvInputPreview.visibility = View.GONE
                     return
                 }
-
                 val parts = text.split(" ", limit = 2)
                 val mathPart = parts[0]
                 val descPart = if (parts.size > 1) parts[1].replaceFirstChar { it.uppercase() } else ""
-
                 val mathResult = evaluateMath(mathPart)
                 val amount = mathResult ?: mathPart.toDoubleOrNull() ?: 0.0
 
@@ -739,23 +625,16 @@ class MainActivity : AppCompatActivity() {
                     val absAmount = abs(amount)
                     val cleanDesc = if(descPart.isBlank()) "..." else descPart
                     val symbol = CurrencyHelper.getSymbol(this@MainActivity)
-
                     val fmtAmount = if (absAmount % 1.0 == 0.0) absAmount.toLong().toString() else String.format("%.1f", absAmount)
-
                     binding.tvInputPreview.text = "$type $symbol$fmtAmount · $cleanDesc"
                     binding.tvInputPreview.visibility = View.VISIBLE
-                } else {
-                    binding.tvInputPreview.visibility = View.GONE
-                }
+                } else binding.tvInputPreview.visibility = View.GONE
             }
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
-
         binding.etInput.setOnClickListener { updateSignToggleVisibility() }
     }
-
-
 
     private fun showActionDialog(transaction: Transaction) {
         val options = arrayOf("Edit", "Delete")
@@ -774,11 +653,9 @@ class MainActivity : AppCompatActivity() {
         editingTransaction = transaction
         binding.etInput.setText(transaction.originalText)
         binding.etInput.setSelection(transaction.originalText.length)
-
         binding.btnSend.background.mutate().setTint(android.graphics.Color.parseColor("#FF9800"))
         binding.btnCancelEdit.visibility = View.VISIBLE
         binding.etInput.requestFocus()
-
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(binding.etInput, InputMethodManager.SHOW_IMPLICIT)
     }
@@ -789,7 +666,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnSend.background.mutate().setTintList(null)
         editingTransaction = null
         binding.btnCancelEdit.visibility = View.GONE
-
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(binding.etInput.windowToken, 0)
     }
@@ -798,9 +674,7 @@ class MainActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Delete?")
             .setMessage(transaction.originalText)
-            .setPositiveButton("Delete") { _, _ ->
-                deleteTransaction(transaction)
-            }
+            .setPositiveButton("Delete") { _, _ -> deleteTransaction(transaction) }
             .setNegativeButton("Cancel", null)
             .show()
     }
@@ -810,186 +684,99 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSummarySheet() {
-        // Use ViewModel's data instead of DB
         val list = viewModel.transactions.value ?: emptyList()
         if (list.isEmpty()) return
-
         fun sumRange(start: Long): Double = list.filter { it.timestamp >= start }.sumOf { it.amount }
-
         val cal = Calendar.getInstance()
-
-        // Today
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0)
         val todaySum = sumRange(cal.timeInMillis)
-
-        // This Week
         cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
         val weekSum = sumRange(cal.timeInMillis)
-
-        // This Month
         cal.set(Calendar.DAY_OF_MONTH, 1)
         val monthSum = sumRange(cal.timeInMillis)
-
-        // All Time
         val totalSum = list.sumOf { it.amount }
-
         fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
         val symbol = CurrencyHelper.getSymbol(this)
-
-        val summary = "Today:      $symbol ${fmt(todaySum)}\n" +
-                "This Week:  $symbol ${fmt(weekSum)}\n" +
-                "This Month: $symbol ${fmt(monthSum)}\n" +
-                "All Time:   $symbol ${fmt(totalSum)}"
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Performance Summary")
-            .setMessage(summary)
-            .setPositiveButton("OK", null)
-            .show()
+        val summary = "Today:      $symbol ${fmt(todaySum)}\nThis Week:  $symbol ${fmt(weekSum)}\nThis Month: $symbol ${fmt(monthSum)}\nAll Time:   $symbol ${fmt(totalSum)}"
+        MaterialAlertDialogBuilder(this).setTitle("Performance Summary").setMessage(summary).setPositiveButton("OK", null).show()
     }
 
     private fun showExportDialog() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Export Data")
-            .setItems(arrayOf("CSV (Excel)", "Text File")) { _, which ->
-                exportData(which == 0)
-            }
-            .show()
+        MaterialAlertDialogBuilder(this).setTitle("Export Data").setItems(arrayOf("CSV (Excel)", "Text File")) { _, which -> exportData(which == 0) }.show()
     }
 
     private fun exportData(isCsv: Boolean) {
         val transactions = viewModel.transactions.value ?: emptyList()
-        if (transactions.isEmpty()) {
-            showError("No data to export")
-            return
-        }
-
+        if (transactions.isEmpty()) { showError("No data to export"); return }
         lifecycleScope.launch(Dispatchers.IO) {
             val sb = StringBuilder()
             val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
             val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
             val symbol = CurrencyHelper.getSymbol(applicationContext)
-
             fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
 
             if (isCsv) {
-                // BUG 7 FIX: Added 'Timestamp' column for precision restoration
-                sb.append("Date,Time,Amount,Description,Timestamp\n")
+                // FIXED: Now includes Nature and Obligation
+                sb.append("Date,Time,Amount,Description,Nature,Obligation,Timestamp\n")
                 for (t in transactions) {
                     val date = Date(t.timestamp)
-                    // CSV Escape: Replace " with "" and wrap in "
                     val safeDesc = t.description.replace("\"", "\"\"")
-                    sb.append("${dateFormat.format(date)},${timeFormat.format(date)},${fmt(t.amount)},\"$safeDesc\",${t.timestamp}\n")
+                    sb.append("${dateFormat.format(date)},${timeFormat.format(date)},${fmt(t.amount)},\"$safeDesc\",${t.nature},${fmt(t.obligationAmount)},${t.timestamp}\n")
                 }
             } else {
-                sb.append("JotPay REPORT\n")
-                sb.append("Currency: $symbol\n")
-                sb.append("=================\n")
+                sb.append("JotPay REPORT\nCurrency: $symbol\n=================\n")
                 for (t in transactions) {
                     val date = Date(t.timestamp)
-                    sb.append("[${dateFormat.format(date)}] ${fmt(t.amount)} ${t.description}\n")
+                    val natureTag = if (t.nature != "NORMAL") " [${t.nature}]" else ""
+                    sb.append("[${dateFormat.format(date)}] ${fmt(t.amount)} ${t.description}$natureTag\n")
                 }
             }
-
             try {
                 val filename = if (isCsv) "JotPay_Backup.csv" else "JotPay_Backup.txt"
                 val file = File(cacheDir, filename)
                 file.writeText(sb.toString())
-
                 val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.provider", file)
                 val intent = Intent(Intent.ACTION_SEND)
                 intent.type = if (isCsv) "text/csv" else "text/plain"
                 intent.putExtra(Intent.EXTRA_STREAM, uri)
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-                withContext(Dispatchers.Main) {
-                    startActivity(Intent.createChooser(intent, "Share Export"))
-                }
-
-                //RESET THE TIMER
-                getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putLong("last_backup_timestamp", System.currentTimeMillis())
-                    .apply()
-
-
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    showError("Export Failed: ${e.message}")
-                }
-            }
+                withContext(Dispatchers.Main) { startActivity(Intent.createChooser(intent, "Share Export")) }
+                getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE).edit().putLong("last_backup_timestamp", System.currentTimeMillis()).apply()
+            } catch (e: Exception) { withContext(Dispatchers.Main) { showError("Export Failed: ${e.message}") } }
         }
     }
-
-    // --- FIRST LAUNCH / MONTHLY CHECK ---
 
     private fun checkFirstLaunchFlow() {
         val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
-        val isPolicyAccepted = prefs.getBoolean("policy_accepted", false)
-
-        if (!isPolicyAccepted) {
-            showPrivacyWelcomeDialog()
-        } else {
-            checkCurrencySetup()
-        }
+        if (!prefs.getBoolean("policy_accepted", false)) showPrivacyWelcomeDialog() else checkCurrencySetup()
     }
 
     private fun showPrivacyWelcomeDialog() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Welcome to JotPay")
-            .setMessage("Before you start tracking your finances, please accept our terms.\n\n" +
-                    "• Your data is encrypted and stored locally.\n" +
-                    "• Cloud Sync is optional and end-to-end encrypted.\n" +
-                    "• We do not track you or sell your data.")
-            .setCancelable(false)
+        MaterialAlertDialogBuilder(this).setTitle("Welcome to JotPay").setMessage("Before you start tracking your finances, please accept our terms.\n\n• Your data is encrypted and stored locally.\n• Cloud Sync is optional and end-to-end encrypted.\n• We do not track you or sell your data.").setCancelable(false)
             .setPositiveButton("Accept & Continue") { _, _ ->
-                getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean("policy_accepted", true)
-                    .apply()
+                getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE).edit().putBoolean("policy_accepted", true).apply()
                 checkCurrencySetup()
             }
-            .setNegativeButton("Read Full Policy") { _, _ ->
-                startActivity(Intent(this, PrivacyActivity::class.java))
-            }
-            .show()
+            .setNegativeButton("Read Full Policy") { _, _ -> startActivity(Intent(this, PrivacyActivity::class.java)) }.show()
     }
 
     private fun checkCurrencySetup() {
-        if (!CurrencyHelper.isCurrencySet(this)) {
-            showCurrencySelector(isFirstLaunch = true)
-        } else {
-            viewModel.refreshData()
-            checkMonthlyCheckpoint()
-        }
+        if (!CurrencyHelper.isCurrencySet(this)) showCurrencySelector(isFirstLaunch = true) else { viewModel.refreshData(); checkMonthlyCheckpoint() }
     }
 
     private fun checkMonthlyCheckpoint() {
         val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
         val lastSeen = prefs.getString("last_month_checkpoint", "")
-
         val cal = Calendar.getInstance()
         val currentMonthKey = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(cal.time)
 
         if (lastSeen != currentMonthKey) {
-            // It's a new month! Show summary of previous month
-
-            // Calculate previous month range
-            cal.add(Calendar.MONTH, -1)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
-            cal.set(Calendar.HOUR_OF_DAY, 0)
-            cal.set(Calendar.MINUTE, 0)
+            cal.add(Calendar.MONTH, -1); cal.set(Calendar.DAY_OF_MONTH, 1); cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
             val start = cal.timeInMillis
-
-            cal.add(Calendar.MONTH, 1)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
+            cal.add(Calendar.MONTH, 1); cal.set(Calendar.DAY_OF_MONTH, 1)
             val end = cal.timeInMillis
 
-            // Run DB query in background
             lifecycleScope.launch(Dispatchers.IO) {
-                // Creates a temporary DB instance just for this check to avoid complexity
                 val tempDb = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "moneylog-db").build()
                 val list = tempDb.transactionDao().getAll()
                 val prevMonthList = list.filter { it.timestamp in start until end }
@@ -997,15 +784,11 @@ class MainActivity : AppCompatActivity() {
                 if (prevMonthList.isNotEmpty()) {
                     val sum = prevMonthList.sumOf { it.amount }
                     val prevMonthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date(start))
-
                     withContext(Dispatchers.Main) {
                         val symbol = CurrencyHelper.getSymbol(this@MainActivity)
                         val fmtSum = if (sum % 1.0 == 0.0) sum.toLong().toString() else String.format("%.1f", sum)
-
                         binding.tvMonthlySummary.text = "Last month ($prevMonthName): $symbol $fmtSum"
                         binding.tvMonthlySummary.visibility = View.VISIBLE
-
-                        // Save checkpoint
                         prefs.edit().putString("last_month_checkpoint", currentMonthKey).apply()
                     }
                 }
@@ -1016,17 +799,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun showCurrencySelector(isFirstLaunch: Boolean) {
         val currencies = CurrencyHelper.CURRENCIES
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Select Currency")
-            .setCancelable(!isFirstLaunch)
+        MaterialAlertDialogBuilder(this).setTitle("Select Currency").setCancelable(!isFirstLaunch)
             .setItems(currencies) { _, which ->
                 CurrencyHelper.setCurrency(this, currencies[which])
                 viewModel.refreshData()
                 if(isFirstLaunch) checkMonthlyCheckpoint()
-            }
-            .show()
+            }.show()
     }
-    // Add this Helper Class inside MainActivity
+
     class DoubleEvaluator : android.animation.TypeEvaluator<Double> {
         override fun evaluate(fraction: Float, startValue: Double, endValue: Double): Double {
             return startValue + (endValue - startValue) * fraction.toDouble()
@@ -1037,22 +817,10 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
         val lastReminded = prefs.getLong("last_backup_timestamp", 0L)
         val now = System.currentTimeMillis()
-
-        // 7 Days in milliseconds = 604800000
-        val interval = 604800000L
-
-        if (now - lastReminded > interval) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Backup Reminder")
-                .setMessage("It's been a while since your last backup.\n\nTo prevent data loss, we recommend exporting your data to Google Drive or keeping a CSV copy safe.")
-                .setPositiveButton("Export Now") { _, _ ->
-                    showExportDialog()
-                }
-                .setNegativeButton("Remind Later") { _, _ ->
-                    // Reset timer so we don't nag them again immediately
-                    prefs.edit().putLong("last_backup_timestamp", now).apply()
-                }
-                .show()
+        if (now - lastReminded > 604800000L) {
+            MaterialAlertDialogBuilder(this).setTitle("Backup Reminder").setMessage("It's been a while since your last backup.\n\nTo prevent data loss, we recommend exporting your data to Google Drive or keeping a CSV copy safe.")
+                .setPositiveButton("Export Now") { _, _ -> showExportDialog() }
+                .setNegativeButton("Remind Later") { _, _ -> prefs.edit().putLong("last_backup_timestamp", now).apply() }.show()
         }
     }
 }

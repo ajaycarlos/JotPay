@@ -30,6 +30,11 @@ class TransactionRepository(private val db: AppDatabase, private val syncManager
         return db.transactionDao().checkDuplicate(amount, desc, start, end)
     }
 
+    suspend fun getAssets() = db.transactionDao().getAssets()
+    suspend fun getLiabilities() = db.transactionDao().getLiabilities()
+    suspend fun getTotalAssets() = db.transactionDao().getTotalAssets()
+    suspend fun getTotalLiabilities() = db.transactionDao().getTotalLiabilities()
+
     fun scheduleSync(forcePush: Boolean = false): UUID {
         return syncManager.scheduleSync(forcePush)
     }
