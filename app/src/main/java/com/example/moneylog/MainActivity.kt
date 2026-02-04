@@ -262,6 +262,11 @@ class MainActivity : AppCompatActivity() {
         binding.navView.setNavigationItemSelectedListener { menuItem ->
             binding.drawerLayout.closeDrawer(GravityCompat.START)
             when (menuItem.itemId) {
+                R.id.nav_faq -> {
+                    startActivity(Intent(this, FaqActivity::class.java))
+                    binding.drawerLayout.closeDrawer(GravityCompat.START)
+                    true
+                }
                 R.id.nav_export -> showExportDialog()
                 R.id.nav_import -> importLauncher.launch("text/*")
                 R.id.nav_currency -> showCurrencySelector(isFirstLaunch = false)
