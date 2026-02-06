@@ -49,9 +49,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val serverSnapshot = ref.child("transactions").get().await()
             val deletedSnapshot = ref.child("deleted").get().await()
 
-            // FIX: Capture pending edits AFTER network call to avoid race conditions
-            val pendingEdits = syncManager.getPendingEdits()
-            val activePendingDeletes = syncManager.getPendingDeletes().mapNotNull { it.toLongOrNull() }.toSet()
+            // FIX: Capture pending edits snapshot for the PUSH phase only
+            val pendingEditsSnapshot = syncManager.getPendingEdits()
 
             val serverDeletedIds = mutableSetOf<String>()
             for (child in deletedSnapshot.children) {
@@ -79,11 +78,11 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     jsonObject.put("a", t.amount)
                     jsonObject.put("d", t.description)
                     jsonObject.put("t", t.timestamp)
-                    jsonObject.put("n", t.nature)           // <--- Vital for Assets
-                    jsonObject.put("oa", t.obligationAmount)// <--- Vital for Assets
+                    jsonObject.put("n", t.nature)
+                    jsonObject.put("oa", t.obligationAmount)
 
                     var shouldPush = true
-                    val isPendingEdit = pendingEdits.contains(t.timestamp.toString())
+                    val isPendingEdit = pendingEditsSnapshot.contains(t.timestamp.toString())
 
                     // Compare with Server Data to decide if we need to Push
                     if (serverSnapshot.hasChild(stableId)) {
@@ -96,7 +95,9 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                                 val sText = serverObj.optString("o")
                                 val sAmt = serverObj.optDouble("a")
                                 val sDesc = serverObj.optString("d")
-                                val sNature = serverObj.optString("n", "NORMAL") // Default to Normal if missing
+
+                                // FIX: Safe Defaults for Cross-Version Compatibility
+                                val sNature = serverObj.optString("n", "NORMAL")
                                 val sObligation = serverObj.optDouble("oa", 0.0)
 
                                 // Floating point comparison tolerance
@@ -139,8 +140,6 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             // ---------------------------------------------------------
             for (child in serverSnapshot.children) {
                 val serverKey = child.key ?: continue
-
-                // Skip if we just pushed it (we know it's current)
                 if (pushedKeys.contains(serverKey)) continue
 
                 val encryptedJson = child.getValue(String::class.java) ?: continue
@@ -154,12 +153,17 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                         val desc = jsonObject.optString("d")
                         val timestamp = jsonObject.optLong("t")
 
-                        // READ NEW FIELDS (Default to NORMAL/0.0 if from old app version)
+                        // FIX: EXTRACT VARIABLES SO THEY ARE NOT UNRESOLVED (Red Marks Fixed)
                         val nature = jsonObject.optString("n", "NORMAL")
                         val obligationAmount = jsonObject.optDouble("oa", 0.0)
 
-                        if (activePendingDeletes.contains(timestamp)) continue
-                        if (pendingEdits.contains(timestamp.toString())) continue
+                        // FIX: GET FRESH LISTS TO PREVENT OVERWRITING NEW LOCAL EDITS
+                        val freshPendingEdits = syncManager.getPendingEdits()
+                        val freshPendingDeletes = syncManager.getPendingDeletes()
+
+                        // Check FRESH lists, not the old snapshots
+                        if (freshPendingDeletes.contains(timestamp.toString())) continue
+                        if (freshPendingEdits.contains(timestamp.toString())) continue
 
                         val existing = db.transactionDao().getByTimestamp(timestamp)
 
@@ -170,7 +174,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                                 amount = amount,
                                 description = desc,
                                 timestamp = timestamp,
-                                nature = nature,
+                                nature = nature, // Now these variables exist!
                                 obligationAmount = obligationAmount
                             ))
                             changesCount++

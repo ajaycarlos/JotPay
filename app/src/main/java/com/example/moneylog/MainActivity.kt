@@ -137,7 +137,7 @@
                 }
 
                 if (list.isEmpty()) {
-                    binding.tvEmptyState.text = "Type +500 salary or -40 bus to begin"
+                    binding.tvEmptyState.text = "Try +7000"
                     binding.tvEmptyState.visibility = View.VISIBLE
                     binding.rvTransactions.visibility = View.GONE
                 } else {
@@ -198,7 +198,20 @@
         private fun setupListeners() {
             binding.swipeRefresh.setProgressBackgroundColorSchemeColor(android.graphics.Color.TRANSPARENT)
             binding.swipeRefresh.setColorSchemeColors(android.graphics.Color.parseColor("#81C784"))
-            binding.swipeRefresh.setOnRefreshListener { runSync() }
+            binding.swipeRefresh.setOnRefreshListener {
+                if (!isNetworkAvailable()) {
+                    // No Internet? Just stop the spinner silently.
+                    binding.swipeRefresh.isRefreshing = false
+                } else {
+                    // Internet OK? Run the sync
+                    runSync()
+
+                    // Safety Timeout: Force stop spinner after 5 seconds
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        binding.swipeRefresh.isRefreshing = false
+                    }, 5000)
+                }
+            }
 
             // 1. STANDARD CLICK -> Normal Transaction
             binding.btnSend.setOnClickListener {
@@ -326,7 +339,7 @@
                 runSync(force = false)
 
             } else {
-                showError("Please enter an amount (e.g., '50 Coffee')")
+                showError("Please enter an amount (e.g., '50 Snacks')")
             }
         }
 
@@ -549,7 +562,7 @@
                         if (selStart >= 0 && selEnd >= 0) binding.etInput.setSelection(selStart, selEnd)
                     }
 
-                    if (text.isEmpty()) binding.etInput.hint = "Try '-50 coffee'"
+                    if (text.isEmpty()) binding.etInput.hint = "Try '+500 Dividends'"
                     else if (isTransactionStart && !hasSpace) binding.etInput.hint = "Amount (supports + - * /)"
                     else binding.etInput.hint = "Description"
                 }
@@ -911,6 +924,13 @@
             Handler(Looper.getMainLooper()).postDelayed({
                 if (popup.isShowing) popup.dismiss()
             }, 5000)
+        }
+
+        private fun isNetworkAvailable(): Boolean {
+            val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val activeNetwork = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+            return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
         }
 
     }

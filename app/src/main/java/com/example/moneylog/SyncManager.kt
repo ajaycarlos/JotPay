@@ -26,7 +26,8 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             "JotPaySyncQueue",
-            androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE,
+            // CHANGE THIS from APPEND_OR_REPLACE to REPLACE
+            androidx.work.ExistingWorkPolicy.REPLACE,
             syncRequest
         )
         return syncRequest.id
