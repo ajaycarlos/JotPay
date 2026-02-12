@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - JotPay</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px 20px; background-color: #f9f9f9; }
+        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 0; }
+        h2 { color: #2980b9; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        h3 { color: #34495e; font-size: 1.1em; }
+        p, li { margin-bottom: 15px; }
+        .last-updated { font-style: italic; color: #7f8c8d; margin-bottom: 30px; }
+        .contact-box { background: #ecf0f1; padding: 20px; border-radius: 5px; margin-top: 40px; }
+        ul { padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Privacy Policy & Terms of Service</h1>
+        <p class="last-updated">Last Updated: February 12, 2026</p>
+
+        <h2>1. Introduction</h2>
+        <p>Welcome to <strong>JotPay – Daily Ledger</strong>. We are committed to protecting your privacy and ensuring the security of your financial data. This Privacy Policy explains how your information is collected, used, and stored when you use the JotPay mobile application.</p>
+
+        <h2>2. Data Collection and Storage</h2>
+        <h3>2.1. Local-First Architecture</h3>
+        <p>JotPay operates on a "Local-First" basis. Your financial transaction logs, descriptions, and amounts are stored locally on your device's internal storage in a secure <strong>Room Persistence SQL database</strong>. We do not have access to this local database.</p>
+
+        <h3>2.2. Cloud Synchronization (Optional)</h3>
+        <p>If you choose to use the "Link Device" feature, your data will be synchronized using <strong>Google Firebase Realtime Database</strong> as a blind relay.</p>
+        <ul>
+            <li><strong>Encryption:</strong> We use industry-standard <strong>AES-128 encryption (CBC Mode)</strong>. Every transaction is encrypted with a unique, randomized Initialization Vector (IV), ensuring that your data remains private and unreadable to anyone else, including the developers.</li>
+            <li><strong>Keys:</strong> The decryption keys are generated and stored solely on your devices. We cannot decrypt or view your financial data.</li>
+            <li><strong>Retention:</strong> Data on the cloud serves strictly as a synchronization relay between your linked devices.</li>
+        </ul>
+
+        <h2>3. Permissions</h2>
+        <p>We request the minimum permissions necessary for functionality:</p>
+        <ul>
+            <li><strong>CAMERA:</strong> Required strictly for scanning QR codes via the <strong>ZXing SDK</strong> to link devices. No images are saved or transmitted.</li>
+            <li><strong>INTERNET:</strong> Required only to synchronize encrypted data between your linked devices.</li>
+        </ul>
+
+        <h2>4. Data Ownership and Export</h2>
+        <p>You retain full ownership of your data. The application provides built-in tools to export your transaction history to <strong>CSV (Excel)</strong> or Text formats at any time. You may delete your data by clearing the application storage, deleting transactions individually, or uninstalling the application.</p>
+
+        <h2>5. Third-Party Services & Data Safety</h2>
+        <p>We use <strong>Google Firebase</strong> to provide synchronization infrastructure. By using the sync feature, you acknowledge that third-party services may collect data used to identify your device for security and performance purposes:</p>
+        <ul>
+            <li><strong>Device Identifiers:</strong> We collect a unique Installation ID (UUID) to manage device linking and synchronization sessions.</li>
+            <li><strong>App Performance:</strong> Firebase may collect diagnostic data (crash logs, performance metrics) to ensure service stability.</li>
+        </ul>
+        <p>For more information on how Google handles this data, please refer to the <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a>.</p>
+
+        <h2>6. Changes to This Policy</h2>
+        <p>We may update our Privacy Policy from time to time. You are advised to review this page periodically for any changes.</p>
+
+        <div class="contact-box">
+            <h2>7. Contact Us</h2>
+            <p>If you have any questions about this Privacy Policy, please contact the developer, <strong>Ajay Pulikkal</strong>, at:</p>
+            <p><strong>Email:</strong> <a href="mailto:thecarlosdev@gmail.com@gmail.com"thecarlosdev@gmail.com</a></p>
+        </div>
+    </div>
+</body>
+</html>
