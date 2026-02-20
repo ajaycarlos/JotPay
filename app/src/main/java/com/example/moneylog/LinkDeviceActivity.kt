@@ -22,6 +22,8 @@
             import com.journeyapps.barcodescanner.BarcodeEncoder
             import org.json.JSONObject
             import java.util.UUID
+    import androidx.core.view.ViewCompat
+    import androidx.core.view.WindowInsetsCompat
 
     class LinkDeviceActivity : AppCompatActivity() {
 
@@ -30,13 +32,32 @@
         private var deviceListener: ValueEventListener? = null
         private var currentVaultId: String? = null
 
+        private lateinit var db: AppDatabase
+
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             binding = ActivityLinkDeviceBinding.inflate(layoutInflater)
             setContentView(binding.root)
 
+            ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
+                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+                // Convert 24dp to actual pixels for your specific tablet screen
+                val density = resources.displayMetrics.density
+                val sidePaddingPx = (24 * density).toInt()
+
+                // Apply: Original side padding, System top padding, and Original bottom padding
+                v.setPadding(sidePaddingPx, systemBars.top, sidePaddingPx, sidePaddingPx)
+
+                insets
+            }
+
             val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "moneylog-db").build()
-            syncManager = SyncManager(this, db) // Init SyncManager
+            syncManager = SyncManager(this, db) //SyncManager
+
+            binding.btnBack.setOnClickListener {
+                finish() //close and go back
+            }
 
             val prefs = getSharedPreferences("jotpay_sync", Context.MODE_PRIVATE)
             currentVaultId = prefs.getString("vault_id", null)
@@ -199,6 +220,8 @@
                         val json = JSONObject(result.contents)
                         val scannedVault = json.getString("v")
                         val scannedKey = json.getString("k")
+
+
 
                         // 1. Validate the key by trying to encrypt a dummy word
                         try {
