@@ -524,18 +524,37 @@
                         line = reader.readLine()
                     }
 
-                    viewModel.importTransactionList(importList)
-
                     withContext(Dispatchers.Main) {
-                        val msg = if (skippedCount > 0) "Imported ${importList.size}. Skipped $skippedCount invalid dates." else "Imported ${importList.size} items"
-                        showError(msg)
+                        val existingTransactions = viewModel.transactions.value ?: emptyList()
+                        val skippedMsg = if (skippedCount > 0) " Skipped $skippedCount invalid dates." else ""
+
+                        if (existingTransactions.isEmpty()) {
+                            viewModel.importTransactionList(importList)
+                            showError("Imported ${importList.size} items.$skippedMsg")
+                        } else {
+                            MaterialAlertDialogBuilder(this@MainActivity)
+                                .setTitle("Import Data")
+                                .setMessage("You already have logs in JotPay.\n" +
+                                        "Do you want to add the new logs or replace the existing ones?\n")
+                                .setPositiveButton("Merge") { _, _ ->
+                                    viewModel.importTransactionList(importList)
+                                    showError("Added ${importList.size} items.$skippedMsg")
+                                }
+                                .setNeutralButton("Overwrite") { _, _ ->
+                                    viewModel.clearAllTransactions {
+                                        viewModel.importTransactionList(importList)
+                                        showError("Cleared existing and imported ${importList.size} items.$skippedMsg")
+                                    }
+                                }
+                                .setNegativeButton("Cancel", null)
+                                .show()
+                        }
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) { showError("Import Failed: ${e.message}") }
                 }
             }
         }
-
         private fun setupInputLogic() {
             setupSearch()
             setupInputPreview()

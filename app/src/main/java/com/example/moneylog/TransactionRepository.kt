@@ -40,6 +40,9 @@ class TransactionRepository(private val db: AppDatabase, private val syncManager
     suspend fun getLiabilities() = db.transactionDao().getLiabilities()
     suspend fun getTotalAssets() = db.transactionDao().getTotalAssets()
     suspend fun getTotalLiabilities() = db.transactionDao().getTotalLiabilities()
+    suspend fun deleteAll() {
+        db.transactionDao().deleteAll()
+    }
 
     fun scheduleSync(forcePush: Boolean = false): UUID {
         return syncManager.scheduleSync(forcePush)

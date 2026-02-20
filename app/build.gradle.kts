@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
         targetSdk = 35
-        versionCode = 115
-        versionName = "2.5.4"
+        versionCode = 123
+        versionName = "2.6.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

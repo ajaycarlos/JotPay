@@ -158,4 +158,14 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     fun scheduleSync(forcePush: Boolean = false): UUID {
         return repository.scheduleSync(forcePush)
     }
+
+    fun clearAllTransactions(onFinished: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteAll()
+            withContext(Dispatchers.Main) {
+                refreshData()
+                onFinished()
+            }
+        }
+    }
 }

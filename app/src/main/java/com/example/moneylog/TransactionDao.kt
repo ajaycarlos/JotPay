@@ -50,4 +50,7 @@ interface TransactionDao {
 
     @Query("SELECT SUM(obligationAmount) FROM transactions WHERE nature = 'LIABILITY'")
     suspend fun getTotalLiabilities(): Double?
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAll()
 }
