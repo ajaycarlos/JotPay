@@ -344,11 +344,9 @@
             if (parsed != null) {
                 val (amount, desc) = parsed
 
-                val finalRawText = if (amount % 1.0 == 0.0) {
-                    "${amount.toLong()} $desc"
-                } else {
-                    "$amount $desc"
-                }
+                // PRESERVE THE SKELETON:
+                // Save exactly what the user typed (e.g. "50 + 100 + 50") so the Edit screen can restore the math perfectly.
+                val finalRawText = rawText
 
                 binding.btnSend.isEnabled = false
 

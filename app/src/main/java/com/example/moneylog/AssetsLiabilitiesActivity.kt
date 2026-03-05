@@ -173,13 +173,12 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
 
         MaterialAlertDialogBuilder(this)
             .setTitle("Settle Transaction?")
-            .setMessage("Mark this record as settled?\n\nThis will remove it from the active list and record a $displayAmount payment in your main history.")
+            .setMessage("Mark this record as settled?\n\nThis will record a $displayAmount payment in your main history to offset the balance.")
             .setPositiveButton("Settle") { _, _ ->
                 val desc = "Settlement: ${transaction.description}"
-                viewModel.addTransaction(desc, settleAmount, desc, "NORMAL")
-
-                val updated = transaction.copy(nature = "NORMAL")
-                viewModel.updateTransaction(updated)
+                // CHANGE: Use transaction.nature instead of "NORMAL"
+                // This forces the settlement to appear in the Asset/Liability tab and zeroes out the math.
+                viewModel.addTransaction(desc, settleAmount, desc, transaction.nature)
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -190,7 +189,9 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
             .setTitle("Remove Record")
             .setMessage("How do you want to remove '${transaction.description}'?")
             .setPositiveButton("Unmark Only") { _, _ ->
-                val updated = transaction.copy(nature = "NORMAL")
+                // RESTORE the true original amount before saving it back to the database
+                val trueOriginalAmount = -transaction.obligationAmount
+                val updated = transaction.copy(nature = "NORMAL", amount = trueOriginalAmount)
                 viewModel.updateTransaction(updated)
             }
             .setNeutralButton("Delete Forever") { _, _ ->
