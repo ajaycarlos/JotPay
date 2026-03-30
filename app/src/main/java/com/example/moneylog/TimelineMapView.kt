@@ -27,9 +27,9 @@ class TimelineMapView @JvmOverloads constructor(
     }
 
     private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#66FFFFFF") // Brighter path
+        color = Color.parseColor("#D3D3D3") // Light Grey
         style = Paint.Style.STROKE
-        strokeWidth = 10f
+        strokeWidth = 8f
         strokeJoin = Paint.Join.ROUND
         strokeCap = Paint.Cap.ROUND
     }
@@ -84,36 +84,38 @@ class TimelineMapView @JvmOverloads constructor(
         pointMap.clear()
         if (items.isEmpty()) return
 
-        val spacingX = 700f // Wider spacing for a better "winding" feel
-        var currentX = 0f
+        // 1. Sharp Vertical Frequency: Reducing this makes horizontal swings feel much steeper
+        val spacingY = 250f // Reduced from 450f
+        var currentY = 0f
 
         val balances = items.map { it.runningBalance }
         val minBalance = balances.minOrNull()?.toFloat() ?: 0f
         val maxBalance = balances.maxOrNull()?.toFloat() ?: 100f
-        val rangeY = if (maxBalance - minBalance == 0f) 500f else (maxBalance - minBalance)
+        val rangeBalance = if (maxBalance - minBalance == 0f) 500f else (maxBalance - minBalance)
 
-        // Use more screen height for the curve (15% to 85%)
-        val topPadding = height * 0.15f
-        val bottomPadding = height * 0.85f
-        val availableHeight = bottomPadding - topPadding
+        // 2. Dramatic Horizontal Swing: Use more of the screen width to maximize the "winding" effect
+        val leftPadding = width * 0.10f
+        val rightPadding = width * 0.85f // Increased from 0.45f
+        val availableWidth = rightPadding - leftPadding
 
         for (item in items) {
-            val normalizedY = (item.runningBalance.toFloat() - minBalance) / rangeY
-            val currentY = bottomPadding - (normalizedY * availableHeight)
+            val normalizedBalance = (item.runningBalance.toFloat() - minBalance) / rangeBalance
+            val currentX = leftPadding + (normalizedBalance * availableWidth)
             pointMap.add(PointF(currentX, currentY))
-            currentX += spacingX
+            currentY += spacingY
         }
-        recenterToMiddle()
     }
 
-    fun recenterToMiddle() {
+    fun recenterToLast() {
         if (pointMap.isEmpty()) return
-        val mapCenterX = (pointMap.first().x + pointMap.last().x) / 2f
-        val mapCenterY = pointMap.map { it.y }.average().toFloat()
+
+        val lastPoint = pointMap.last() // The most recent log
 
         transformMatrix.reset()
-        scaleFactor = 0.7f // Default zoom level improved
-        transformMatrix.postTranslate(width / 2f - mapCenterX, height / 2f - mapCenterY)
+        scaleFactor = 0.8f
+
+        // Center the view on the last point
+        transformMatrix.postTranslate(width / 2f - lastPoint.x, height / 2f - lastPoint.y)
         transformMatrix.postScale(scaleFactor, scaleFactor, width / 2f, height / 2f)
         invalidate()
     }
@@ -128,7 +130,7 @@ class TimelineMapView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // 1. Draw Global Grid (Matches Visualization)
+        // 1. Draw Global Grid
         val gridSize = 120f
         for (x in 0..(width / gridSize).toInt() + 10) canvas.drawLine(x * gridSize, 0f, x * gridSize, height.toFloat(), gridPaint)
         for (y in 0..(height / gridSize).toInt() + 10) canvas.drawLine(0f, y * gridSize, width.toFloat(), y * gridSize, gridPaint)
@@ -137,31 +139,47 @@ class TimelineMapView @JvmOverloads constructor(
         canvas.concat(transformMatrix)
         if (pointMap.isEmpty()) { canvas.restore(); return }
 
-        // 2. Draw the Winding Road (High Tension Curves)
+        // Update the Path drawing block in your onDraw() function:
         val path = Path().apply { moveTo(pointMap.first().x, pointMap.first().y) }
         for (i in 0 until pointMap.size - 1) {
             val p1 = pointMap[i]
             val p2 = pointMap[i+1]
-            val tension = (p2.x - p1.x) / 2
-            path.cubicTo(p1.x + tension, p1.y, p2.x - tension, p2.y, p2.x, p2.y)
+
+            // HIGH-TENSION BEZIER LOGIC
+            // Multiplier (0.8f) makes the curves "overshoot" vertically, creating aggressive bends.
+            val tension = (p2.y - p1.y) * 0.8f
+
+            path.cubicTo(
+                p1.x, p1.y + tension, // Control Point 1: Pulls down from current point
+                p2.x, p2.y - tension, // Control Point 2: Pulls up into next point
+                p2.x, p2.y
+            )
         }
         canvas.drawPath(path, pathPaint)
 
-        // 3. Draw Nodes & Text Labels
+        // 3. Draw Waypoints & Multi-Layered Text
         for (i in items.indices) {
             val item = items[i]
             val point = pointMap[i]
             val paint = if (item.amount > 0) incomePaint else expensePaint
 
+            // Solid Circle Node
             canvas.drawCircle(point.x, point.y, 22f, paint)
 
-            val labelX = point.x + 40f
-            canvas.drawText(item.description, labelX, point.y - 10f, textTitlePaint)
+            val labelX = point.x + 48f
 
+            // Layer 1: Description (Bold White)
+            canvas.drawText(item.description, labelX, point.y - 15f, textTitlePaint)
+
+            // Layer 2: Amount (Color-Matched)
             textAmountPaint.color = paint.color
             val amtStr = if (item.amount > 0) "+ $symbol ${fmt(item.amount)}" else "- $symbol ${fmt(abs(item.amount))}"
-            canvas.drawText(amtStr, labelX, point.y + 40f, textAmountPaint)
-            canvas.drawText("Bal: $symbol ${fmt(item.runningBalance)}", labelX, point.y + 85f, textBalancePaint)
+            canvas.drawText(amtStr, labelX, point.y + 35f, textAmountPaint)
+
+            // Layer 3: Balance & Date (Secondary Grey)
+            val dateStr = dateFormatter.format(Date(item.timestamp))
+            val metaStr = "Bal: $symbol ${fmt(item.runningBalance)}  •  $dateStr"
+            canvas.drawText(metaStr, labelX, point.y + 80f, textBalancePaint)
         }
         canvas.restore()
     }

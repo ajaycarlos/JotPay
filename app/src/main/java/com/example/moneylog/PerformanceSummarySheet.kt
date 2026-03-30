@@ -45,14 +45,19 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
 
         val symbol = CurrencyHelper.getSymbol(requireContext())
 
-        val summaryContainer = view.findViewById<LinearLayout>(R.id.summaryContainer)
+        // FIX: Cast as NestedScrollView to match XML and prevent crashes
+        val summaryContainer = view.findViewById<androidx.core.widget.NestedScrollView>(R.id.summaryContainer)
         val tvDragHint = view.findViewById<TextView>(R.id.tvDragHint)
 
-        // BIND NEW MAP COMPONENTS
+        // BIND MAP COMPONENTS
         val timelineMapView = view.findViewById<TimelineMapView>(R.id.timelineMapView)
         val zoomSlider = view.findViewById<Slider>(R.id.zoomSlider)
         val btnRecenter = view.findViewById<ImageButton>(R.id.btnRecenter)
         val mapControls = view.findViewById<LinearLayout>(R.id.mapControls)
+
+        // BIND NEW CLOSE BUTTON
+        val btnCloseMap = view.findViewById<ImageButton>(R.id.btnCloseMap)
+        btnCloseMap.setOnClickListener { dismiss() }
 
         val tvDateRangeLabel = view.findViewById<TextView>(R.id.tvDateRangeLabel)
         val dateSlider = view.findViewById<RangeSlider>(R.id.dateSlider)
@@ -78,7 +83,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         mapControls.alpha = 0f
 
         btnRecenter.setOnClickListener {
-            timelineMapView.recenterToMiddle()
+            timelineMapView.recenterToLast()
             zoomSlider.value = 0.8f
         }
 
@@ -89,29 +94,52 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         summaryContainer.post {
             val bottomSheet = (view.parent as View)
             val behavior = BottomSheetBehavior.from(bottomSheet)
-            behavior.peekHeight = summaryContainer.height
+
+            // FIX: Clamp peekHeight to ensure room to "drag up"
+            val maxPeek = (resources.displayMetrics.heightPixels * 0.7).toInt()
+            behavior.peekHeight = summaryContainer.height.coerceAtMost(maxPeek)
+
             behavior.state = BottomSheetBehavior.STATE_COLLAPSED
-            behavior.isHideable = true // FIX: Re-enables dragging down to close
+            behavior.isHideable = true
 
             behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
                 override fun onStateChanged(bottomSheet: View, newState: Int) {
-                    // FIX: Only allow Map touch interaction when fully expanded
                     timelineMapView.isEnabled = newState == BottomSheetBehavior.STATE_EXPANDED
+
+                    if (newState == BottomSheetBehavior.STATE_EXPANDED) {
+                        // 1. Prevent the sheet from being hidden (swiped off screen)
+                        behavior.isHideable = false
+                        // 2. DISABLE ALL DRAGGING so it doesn't collapse back to the summary
+                        behavior.isDraggable = false
+                        btnCloseMap.visibility = View.VISIBLE
+                    } else {
+                        // Re-enable dragging and hideability for the summary view
+                        behavior.isHideable = true
+                        behavior.isDraggable = true
+                    }
                 }
+
                 override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                    // SHADE IN ANIMATION
+                    // Dashboard Fade & Slide Animation
                     summaryContainer.alpha = 1f - (slideOffset * 1.2f).coerceAtMost(1f)
                     tvDragHint.alpha = 1f - slideOffset
 
-                    // PHYSICALLY slide it off the top so it doesn't block the map
-                    summaryContainer.translationY = - (summaryContainer.height * slideOffset)
+                    // Slide summary off the top only when moving UP
+                    if (slideOffset > 0) {
+                        summaryContainer.translationY = -(summaryContainer.height * slideOffset)
+                    } else {
+                        summaryContainer.translationY = 0f
+                    }
 
-                    // Map controls appear at the very end
+                    // Fade in 'X' button and Map controls
+                    btnCloseMap.alpha = if (slideOffset > 0.8f) (slideOffset - 0.8f) * 5f else 0f
+                    btnCloseMap.visibility = if (slideOffset > 0.8f) View.VISIBLE else View.GONE
                     mapControls.alpha = if (slideOffset > 0.9f) (slideOffset - 0.9f) * 10f else 0f
                 }
             })
         }
 
+        // Keep rest of observation logic intact
         var isSliderInitialized = false
         val sliderDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
 
@@ -202,7 +230,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
 
     private fun animateText(tv: TextView, target: Double, format: (Double) -> String) {
         val start = (tv.tag as? Double) ?: 0.0
-        if (start == target && tv.text.isNotEmpty()) return
+        if (start == target && tv.tag != null) return
         tv.tag = target
 
         val animator = android.animation.ValueAnimator.ofFloat(start.toFloat(), target.toFloat())
