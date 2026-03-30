@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
         targetSdk = 35
-        versionCode = 134
-        versionName = "2.7.3"
+        versionCode = 144
+        versionName = "2.8.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -79,4 +79,8 @@ dependencies {
     // --- LIFECYCLE (MVVM) ---
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
+
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    implementation("com.google.android.material:material:1.13.0")
 }

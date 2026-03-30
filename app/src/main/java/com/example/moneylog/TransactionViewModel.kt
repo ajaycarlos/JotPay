@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.math.abs
 
 class TransactionViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -33,6 +34,17 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     private val _totalLiabilities = MutableLiveData<Double>()
     val totalLiabilities: LiveData<Double> = _totalLiabilities
 
+    private val _performanceStats = MutableLiveData<PerformanceStats>()
+    val performanceStats: LiveData<PerformanceStats> = _performanceStats
+
+    private val _dateRange = MutableLiveData<Pair<Long, Long>?>(null)
+    val dateRange: LiveData<Pair<Long, Long>?> = _dateRange
+
+    fun setDateRange(start: Long, end: Long) {
+        _dateRange.value = Pair(start, end)
+        _transactions.value?.let { calculatePerformanceStats(it) }
+    }
+
     init {
         val db = Room.databaseBuilder(application, AppDatabase::class.java, "moneylog-db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
@@ -46,12 +58,15 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     fun refreshData() {
         viewModelScope.launch(Dispatchers.IO) {
             val list = repository.getAllTransactions()
-            val total = list.sumOf { it.amount }
+            val total = list.filter { it.nature == "NORMAL" }.sumOf { it.amount }
 
             withContext(Dispatchers.Main) {
                 _transactions.value = list
                 _totalBalance.value = total
             }
+
+            // RUN OUR NEW CALCULATION ENGINE IN THE BACKGROUND
+            calculatePerformanceStats(list)
         }
     }
 
@@ -102,6 +117,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
                 // If you get Repaid (+300), Obligation becomes -300 (Subtracted from Asset).
                 -amount
             }
+
             else -> 0.0
         }
     }
@@ -143,7 +159,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
 
     fun importTransactionList(list: List<Transaction>) {
         viewModelScope.launch(Dispatchers.IO) {
-            for(t in list) {
+            for (t in list) {
                 // FIX: Removed 60-second window. Now checks Exact Match (Timestamp + Amount + Desc)
                 // This prevents legitimate simultaneous purchases from being discarded.
                 val count = repository.checkDuplicate(t.amount, t.description, t.timestamp)
@@ -165,6 +181,111 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             withContext(Dispatchers.Main) {
                 refreshData()
                 onFinished()
+            }
+        }
+    }
+
+    private fun calculatePerformanceStats(list: List<Transaction>) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val now = java.util.Calendar.getInstance()
+            val currentYear = now.get(java.util.Calendar.YEAR)
+            val currentDay = now.get(java.util.Calendar.DAY_OF_YEAR)
+            val currentWeek = now.get(java.util.Calendar.WEEK_OF_YEAR)
+            val currentMonth = now.get(java.util.Calendar.MONTH)
+
+            var todayNet = 0.0
+            var todayCredits = 0.0
+            var todayDebits = 0.0
+            var weekNet = 0.0
+            var weekCredits = 0.0
+            var weekDebits = 0.0
+            var monthNet = 0.0
+            var monthCredits = 0.0
+            var monthDebits = 0.0
+
+            val sortedList = list.filter { it.nature == "NORMAL" }.sortedBy { it.timestamp }
+            if (sortedList.isEmpty()) {
+                withContext(Dispatchers.Main) { _performanceStats.value = PerformanceStats() }
+                return@launch
+            }
+
+            val allDays = sortedList.map {
+                val c = java.util.Calendar.getInstance()
+                c.timeInMillis = it.timestamp
+                c.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                c.set(java.util.Calendar.MINUTE, 0)
+                c.set(java.util.Calendar.SECOND, 0)
+                c.set(java.util.Calendar.MILLISECOND, 0)
+                c.timeInMillis
+            }.distinct()
+
+            val selectedStart = _dateRange.value?.first ?: allDays.first()
+            val selectedEnd = _dateRange.value?.second ?: allDays.last()
+
+            val strictEnd = if (selectedEnd == Long.MAX_VALUE) Long.MAX_VALUE else {
+                val endCal = java.util.Calendar.getInstance()
+                endCal.timeInMillis = selectedEnd
+                endCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                endCal.timeInMillis - 1L
+            }
+
+            var periodNet = 0.0
+            var periodCredits = 0.0
+            var periodDebits = 0.0
+            var runningBalance = 0.0
+            val timelineList = mutableListOf<TimelineItem>()
+            val cal = java.util.Calendar.getInstance()
+
+            // 1. RUN THE CALCULATION LOOP
+            for (t in sortedList) {
+                runningBalance += t.amount
+                cal.timeInMillis = t.timestamp
+
+                if (cal.get(java.util.Calendar.YEAR) == currentYear) {
+                    if (cal.get(java.util.Calendar.DAY_OF_YEAR) == currentDay) {
+                        todayNet += t.amount
+                        if (t.amount > 0) todayCredits += t.amount else todayDebits += t.amount
+                    }
+                    if (cal.get(java.util.Calendar.WEEK_OF_YEAR) == currentWeek) {
+                        weekNet += t.amount
+                        if (t.amount > 0) weekCredits += t.amount else weekDebits += t.amount
+                    }
+                    if (cal.get(java.util.Calendar.MONTH) == currentMonth) {
+                        monthNet += t.amount
+                        if (t.amount > 0) monthCredits += t.amount else monthDebits += t.amount
+                    }
+                }
+
+                if (t.timestamp in selectedStart..strictEnd) {
+                    periodNet += t.amount
+                    if (t.amount > 0) periodCredits += t.amount else periodDebits += t.amount
+                    timelineList.add(TimelineItem(t.timestamp, t.description, t.amount, runningBalance))
+                }
+            }
+
+            // 2. AFTER THE LOOP IS FINISHED, CREATE THE STATS OBJECT
+            timelineList.reverse()
+
+            val finalStats = PerformanceStats(
+                periodNet = periodNet,
+                periodCredits = periodCredits,
+                periodDebits = periodDebits,
+                todayNet = todayNet,
+                todayCredits = todayCredits,
+                todayDebits = todayDebits,
+                weekNet = weekNet,
+                weekCredits = weekCredits,
+                weekDebits = weekDebits,
+                monthNet = monthNet,
+                monthCredits = monthCredits,
+                monthDebits = monthDebits,
+                availableTimestamps = allDays,
+                timeline = timelineList
+            )
+
+            // 3. EMIT THE FINISHED DATA ONCE
+            withContext(Dispatchers.Main) {
+                _performanceStats.value = finalStats
             }
         }
     }

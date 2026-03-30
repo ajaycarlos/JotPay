@@ -814,21 +814,8 @@
         }
 
         private fun showSummarySheet() {
-            val list = viewModel.transactions.value ?: emptyList()
-            if (list.isEmpty()) return
-            fun sumRange(start: Long): Double = list.filter { it.timestamp >= start }.sumOf { it.amount }
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0)
-            val todaySum = sumRange(cal.timeInMillis)
-            cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
-            val weekSum = sumRange(cal.timeInMillis)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
-            val monthSum = sumRange(cal.timeInMillis)
-            val totalSum = list.sumOf { it.amount }
-            fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
-            val symbol = CurrencyHelper.getSymbol(this)
-            val summary = "Today:      $symbol ${fmt(todaySum)}\nThis Week:  $symbol ${fmt(weekSum)}\nThis Month: $symbol ${fmt(monthSum)}\nAll Time:   $symbol ${fmt(totalSum)}"
-            MaterialAlertDialogBuilder(this).setTitle("Performance Summary").setMessage(summary).setPositiveButton("OK", null).show()
+            val sheet = PerformanceSummarySheet()
+            sheet.show(supportFragmentManager, "PerformanceSheet")
         }
 
         private fun showExportDialog() {
