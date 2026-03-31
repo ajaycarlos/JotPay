@@ -1,6 +1,9 @@
 package com.example.moneylog
 
 import android.app.Dialog
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -19,6 +22,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import android.widget.SeekBar
+
 
 class PerformanceSummarySheet : BottomSheetDialogFragment() {
 
@@ -40,8 +45,11 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         return inflater.inflate(R.layout.sheet_performance, container, false)
     }
 
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+
 
         val symbol = CurrencyHelper.getSymbol(requireContext())
 
@@ -54,6 +62,10 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         val zoomSlider = view.findViewById<Slider>(R.id.zoomSlider)
         val btnRecenter = view.findViewById<ImageButton>(R.id.btnRecenter)
         val mapControls = view.findViewById<LinearLayout>(R.id.mapControls)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val blur = RenderEffect.createBlurEffect(45f, 45f, Shader.TileMode.CLAMP)
+            mapControls.setRenderEffect(blur)
+        }
 
         // BIND NEW CLOSE BUTTON
         val btnCloseMap = view.findViewById<ImageButton>(R.id.btnCloseMap)

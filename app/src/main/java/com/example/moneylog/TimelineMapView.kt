@@ -22,8 +22,8 @@ class TimelineMapView @JvmOverloads constructor(
 
     // Premium Styling
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#12FFFFFF") // Subtle grid
-        strokeWidth = 2f
+        color = Color.parseColor("#70FFFFFF") // Subtle faint white
+        strokeWidth = 3f // Thinner for a more technical feel
     }
 
     private val pathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -130,10 +130,28 @@ class TimelineMapView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // 1. Draw Global Grid
-        val gridSize = 120f
-        for (x in 0..(width / gridSize).toInt() + 10) canvas.drawLine(x * gridSize, 0f, x * gridSize, height.toFloat(), gridPaint)
-        for (y in 0..(height / gridSize).toInt() + 10) canvas.drawLine(0f, y * gridSize, width.toFloat(), y * gridSize, gridPaint)
+        // 1. Draw Panning Blueprint Grid (Locked to World)
+        val values = FloatArray(9)
+        transformMatrix.getValues(values)
+        val dx = values[Matrix.MTRANS_X]
+        val dy = values[Matrix.MTRANS_Y]
+        val currentScale = values[Matrix.MSCALE_X]
+
+// Grid size scales with zoom to maintain perspective
+        val gridSize = 300f * currentScale
+        val offsetX = (dx % gridSize + gridSize) % gridSize
+        val offsetY = (dy % gridSize + gridSize) % gridSize
+
+        var curX = offsetX
+        while (curX < width) {
+            canvas.drawLine(curX, 0f, curX, height.toFloat(), gridPaint)
+            curX += gridSize
+        }
+        var curY = offsetY
+        while (curY < height) {
+            canvas.drawLine(0f, curY, width.toFloat(), curY, gridPaint)
+            curY += gridSize
+        }
 
         canvas.save()
         canvas.concat(transformMatrix)
