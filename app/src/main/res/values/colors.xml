@@ -24,4 +24,7 @@
     <color name="slider_inactive">#26FFFFFF</color>
     <color name="slider_thumb">@color/text_primary</color>
     <color name="slider_halo">#1AFFFFFF</color>
+
+    <color name="undo_container_bg">#232323</color>
+    <color name="undo_circle_depth">#121212</color>
 </resources>

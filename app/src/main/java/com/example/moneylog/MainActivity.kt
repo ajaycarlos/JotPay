@@ -71,6 +71,8 @@
         private val importLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
             uri?.let { parseAndImportCsv(it) }
         }
+        private var undoRunnable: Runnable? = null
+        private val undoHandler = Handler(Looper.getMainLooper())
 
         override fun onCreate(savedInstanceState: Bundle?) {
             // Force Dark Mode for consistent UI
@@ -361,10 +363,14 @@
                         originalText = finalRawText,
                         amount = amount,
                         description = desc,
-                        nature = nature // Now applying the nature passed from the button click
+                        nature = nature
                     )
                     viewModel.updateTransaction(updated)
-                    showError("Updated")
+
+                    showCustomUndo("Log updated") {
+                        viewModel.updateTransaction(current) // Restores the old version
+                        runSync(force = false)
+                    }
                 }
 
                 resetInput()
@@ -435,9 +441,15 @@
         }
 
         private fun deleteTransaction(transaction: Transaction) {
+            // Delete instantly
             viewModel.deleteTransaction(transaction)
-            showError("Deleted")
-            runSync()
+            runSync(force = false)
+
+            // Show Undo popup
+            showCustomUndo("Log deleted") {
+                viewModel.restoreTransaction(transaction)
+                runSync(force = false)
+            }
         }
 
         private fun parseAndImportCsv(uri: Uri) {
@@ -766,6 +778,7 @@
             binding.etInput.setOnClickListener { updateSignToggleVisibility() }
         }
 
+        // Bypass the confirmation dialog entirely for a faster UX
         private fun showActionDialog(transaction: Transaction) {
             val options = arrayOf("Edit", "Delete")
             MaterialAlertDialogBuilder(this)
@@ -773,7 +786,7 @@
                 .setItems(options) { _, which ->
                     when (which) {
                         0 -> startEditing(transaction)
-                        1 -> confirmDelete(transaction)
+                        1 -> deleteTransaction(transaction)
                     }
                 }
                 .show()
@@ -798,15 +811,6 @@
             binding.btnCancelEdit.visibility = View.GONE
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             imm.hideSoftInputFromWindow(binding.etInput.windowToken, 0)
-        }
-
-        private fun confirmDelete(transaction: Transaction) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Delete?")
-                .setMessage(transaction.originalText)
-                .setPositiveButton("Delete") { _, _ -> deleteTransaction(transaction) }
-                .setNegativeButton("Cancel", null)
-                .show()
         }
 
         private fun showError(msg: String) {
@@ -1062,6 +1066,40 @@
             // Always unregister listeners to prevent memory leaks
             appUpdateManager.unregisterListener(updateListener)
             super.onDestroy()
+        }
+        private fun showCustomUndo(message: String, onUndo: () -> Unit) {
+            binding.tvUndoMessage.text = message
+            binding.layoutUndoAction.visibility = View.VISIBLE
+
+            // Premium float-up and fade-in animation
+            binding.layoutUndoAction.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(300)
+                .start()
+
+            // Handle Undo Click
+            binding.btnUndoAction.setOnClickListener {
+                onUndo()
+                hideCustomUndo()
+                undoRunnable?.let { undoHandler.removeCallbacks(it) }
+            }
+
+            // Reset the 4-second timer
+            undoRunnable?.let { undoHandler.removeCallbacks(it) }
+            undoRunnable = Runnable { hideCustomUndo() }
+            undoHandler.postDelayed(undoRunnable!!, 4000)
+        }
+
+        private fun hideCustomUndo() {
+            // Float down and fade out
+            binding.layoutUndoAction.animate()
+                .alpha(0f)
+                .translationY(20f) // Sinks slightly as it fades
+                .setDuration(250)
+                .withEndAction {
+                    binding.layoutUndoAction.visibility = View.GONE
+                }.start()
         }
 
     }

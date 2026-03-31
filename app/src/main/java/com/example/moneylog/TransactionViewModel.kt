@@ -289,4 +289,10 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
     }
+    fun restoreTransaction(transaction: Transaction) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insert(transaction)
+            refreshData()
+        }
+    }
 }
