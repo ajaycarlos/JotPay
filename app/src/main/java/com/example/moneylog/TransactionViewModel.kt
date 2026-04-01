@@ -14,7 +14,9 @@ import kotlin.math.abs
 
 class TransactionViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: TransactionRepository
+    // Initialize lazily so it doesn't block the main thread,
+    // satisfying the compiler without breaking our fast-startup architecture.
+
 
     private val _transactions = MutableLiveData<List<Transaction>>()
     val transactions: LiveData<List<Transaction>> = _transactions
@@ -48,16 +50,18 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     // FIX: Declare property ABOVE the init block to ensure it is instantiated before use
     private var currentQuery = ""
 
-    init {
-        val db = Room.databaseBuilder(application, AppDatabase::class.java, "moneylog-db")
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3) // Register BOTH migrations
+    // DEFER: Lazy initialization prevents SharedPreferences & Room builder from blocking ViewModel creation
+    private val db by lazy {
+        Room.databaseBuilder(application, AppDatabase::class.java, "moneylog-db")
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
-        val syncManager = SyncManager(application, db)
-        repository = TransactionRepository(db, syncManager)
+    }
 
-        // FIX: Removed synchronous refreshData() call.
-        // Data loading is now lazily triggered by MainActivity AFTER the UI renders
-        // to prevent the 3-4 second cold start delay.
+    private val syncManager by lazy { SyncManager(application, db) }
+    private val repository by lazy { TransactionRepository(db, syncManager) }
+
+    init {
+        // INSTANT INIT: Zero disk I/O or heavy object creation on the main thread during startup.
     }
 
     fun refreshData() {

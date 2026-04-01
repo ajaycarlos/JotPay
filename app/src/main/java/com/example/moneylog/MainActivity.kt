@@ -80,48 +80,51 @@
 
 
         override fun onCreate(savedInstanceState: Bundle?) {
-            // Force Dark Mode for consistent UI
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+            // The Application class now handles Dark Mode instantly.
 
-            // FIX: Bind the Splash Screen API to the window lifecycle
+            // Bind the Splash Screen API to the window lifecycle
             installSplashScreen()
 
             super.onCreate(savedInstanceState)
 
-            // FIX: Firebase init causes severe 3-5s IO/Network blocking on the Main Thread.
-            // Moved to background coroutine to allow instant UI rendering.
-            lifecycleScope.launch(Dispatchers.IO) {
-                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                if (auth.currentUser == null) auth.signInAnonymously()
-            }
-
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
 
-
             if (savedInstanceState != null) {
                 pendingEditId = savedInstanceState.getLong("editing_id", 0L)
-                pendingEditText = savedInstanceState.getString("editing_text", "") // FIX: Extract saved text
+                pendingEditText = savedInstanceState.getString("editing_text", "")
             }
 
             setupRecyclerView()
             setupListeners()
             setupInputLogic()
-            appUpdateManager = AppUpdateManagerFactory.create(this)
-            appUpdateManager.registerListener(updateListener)
-
 
             val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
             val isSetupDone = prefs.getBoolean("policy_accepted", false) && CurrencyHelper.isCurrencySet(this)
 
-            // FIX: Defer heavy ViewModel instantiation and DB checks until AFTER the first frame draws
+            // FIX: Defer ALL heavy class loading (Firebase, Play Services IPC, and Room DB)
+            // until AFTER the UI layout is fully drawn to the screen.
             binding.root.post {
+                // 1. Pre-warm Firebase in background (Massive class-loading block)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                    if (auth.currentUser == null) auth.signInAnonymously()
+                }
+
+                // 2. Init App Update Manager (Play Services IPC blocking)
+                appUpdateManager = AppUpdateManagerFactory.create(this@MainActivity)
+                appUpdateManager.registerListener(updateListener)
+
+                // 3. Init ViewModel and Room Database
                 observeViewModel()
 
                 if (isSetupDone) {
-                    checkMonthlyCheckpoint()
-                    checkBackupReminder()
-                    checkForUpdates()
+                    lifecycleScope.launch {
+                        kotlinx.coroutines.delay(300) // Yield main thread entirely to the renderer
+                        checkMonthlyCheckpoint()
+                        checkBackupReminder()
+                        checkForUpdates()
+                    }
                 }
             }
 
@@ -159,17 +162,25 @@
                 } else if (!currencySet) {
                     if (!isOnboardingShowing) checkCurrencySetup()
                 } else {
-                    // Only refresh and check for updates IF setup is complete
-                    viewModel.refreshData()
-                    runSync()
-                    checkForUpdates()
-                    startGuidedTutorial()
+                    // DEFER: Launch in coroutine with delay so the empty layout draws immediately
+                    lifecycleScope.launch {
+                        kotlinx.coroutines.delay(300) // Let the splash screen dismiss and UI render first
+                        viewModel.refreshData()
+                        runSync() // Triggers WorkManager database init (Very heavy!)
+                        checkForUpdates()
+                        startGuidedTutorial()
+                    }
                 }
 
-                // Check for downloaded background updates
-                appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
-                    if (info.installStatus() == InstallStatus.DOWNLOADED) {
-                        showUpdateFinishedSnackbar()
+                // Defer IPC Update checks
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(300)
+                    if (::appUpdateManager.isInitialized) {
+                        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
+                            if (info.installStatus() == InstallStatus.DOWNLOADED) {
+                                showUpdateFinishedSnackbar()
+                            }
+                        }
                     }
                 }
             }
@@ -1146,7 +1157,9 @@
 
         override fun onDestroy() {
             // Always unregister listeners to prevent memory leaks
-            appUpdateManager.unregisterListener(updateListener)
+            if (::appUpdateManager.isInitialized) {
+                appUpdateManager.unregisterListener(updateListener)
+            }
 
             // FIX: Cancel pending UI callbacks to prevent Activity memory leaks and crashes
             undoRunnable?.let { undoHandler.removeCallbacks(it) }
