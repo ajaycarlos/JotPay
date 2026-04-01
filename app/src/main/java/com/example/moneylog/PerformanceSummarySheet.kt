@@ -43,8 +43,8 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         bottomSheet.setBackgroundResource(android.R.color.transparent)
         bottomSheet.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 
-        // FIX: Set a stable initial peak height (e.g., 68% of screen) to prevent the "snap"
-        val stablePeek = (resources.displayMetrics.heightPixels * 0.68).toInt()
+        // FIX: Set a stable initial peak height (e.g., 60% of screen) to prevent the "snap"
+        val stablePeek = (resources.displayMetrics.heightPixels * 0.60).toInt()
         behavior.peekHeight = stablePeek
         behavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
@@ -212,13 +212,29 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             animateText(tvPeriodCredits, stats.periodCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
             animateText(tvPeriodDebits, stats.periodDebits) { v -> "- $symbol ${fmt(abs(v))}" }
 
-            // FIX: Scale down massive Long (cents) values to safely fit within Int.MAX_VALUE limits
-            val scaleFactor = 1000.0
-            val maxProgress = if (stats.periodCredits > 0) (stats.periodCredits / scaleFactor) else 1.0
-            val currentProgress = (abs(stats.periodDebits) / scaleFactor)
+            // FIX: Calculate Progress as a Ratio of Income vs Total Flow
+            val income = stats.periodCredits
+            val expense = abs(stats.periodDebits)
+            val total = income + expense
 
-            progressCashFlow.max = maxProgress.toInt()
-            progressCashFlow.setProgressCompat(currentProgress.toInt(), true)
+            progressCashFlow.max = 100
+
+            if (total > 0L) {
+                val incomeRatio = ((income.toDouble() / total.toDouble()) * 100).toInt()
+                progressCashFlow.setProgressCompat(incomeRatio, true)
+
+                // FIX: UI Rendering - Remove the "green dot" or "red edge" bugs by dynamically syncing colors on 0-values
+                val indicatorColor = if (income == 0L) R.color.expense_red else R.color.income_green
+                val trackColor = if (expense == 0L) R.color.income_green else R.color.expense_red
+
+                progressCashFlow.setIndicatorColor(requireContext().getColor(indicatorColor))
+                progressCashFlow.trackColor = requireContext().getColor(trackColor)
+            } else {
+                // Edge Case: Empty/Neutral bar when both are 0
+                progressCashFlow.setProgressCompat(0, false)
+                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.text_tertiary))
+                progressCashFlow.trackColor = requireContext().getColor(R.color.text_tertiary)
+            }
 
             animateText(tvTodayIncome, stats.todayCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
             animateText(tvTodayExpense, stats.todayDebits) { v -> "- $symbol ${fmt(abs(v))}" }

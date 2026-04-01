@@ -27,4 +27,9 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">24dp</item>
     </style>
+
+    <style name="Theme.MoneyLog.Launch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bg_app</item>
+        <item name="postSplashScreenTheme">@style/Theme.MoneyLog</item>
+    </style>
 </resources>

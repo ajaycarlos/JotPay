@@ -55,7 +55,9 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         val syncManager = SyncManager(application, db)
         repository = TransactionRepository(db, syncManager)
 
-        refreshData()
+        // FIX: Removed synchronous refreshData() call.
+        // Data loading is now lazily triggered by MainActivity AFTER the UI renders
+        // to prevent the 3-4 second cold start delay.
     }
 
     fun refreshData() {

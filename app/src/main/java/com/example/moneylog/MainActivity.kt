@@ -49,6 +49,9 @@
     import com.google.android.play.core.install.model.InstallStatus
     import com.google.android.play.core.install.model.UpdateAvailability
     import com.google.android.material.snackbar.Snackbar
+    import com.getkeepsafe.taptargetview.TapTarget
+    import com.getkeepsafe.taptargetview.TapTargetSequence
+    import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
     class MainActivity : AppCompatActivity() {
 
@@ -75,20 +78,26 @@
         private var undoRunnable: Runnable? = null
         private val undoHandler = Handler(Looper.getMainLooper())
 
+
         override fun onCreate(savedInstanceState: Bundle?) {
             // Force Dark Mode for consistent UI
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
 
-
+            // FIX: Bind the Splash Screen API to the window lifecycle
+            installSplashScreen()
 
             super.onCreate(savedInstanceState)
 
-            // FIX: Pre-warm Anonymous Auth silently on app launch so SyncWorker runs instantly later
-            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-            if (auth.currentUser == null) auth.signInAnonymously()
+            // FIX: Firebase init causes severe 3-5s IO/Network blocking on the Main Thread.
+            // Moved to background coroutine to allow instant UI rendering.
+            lifecycleScope.launch(Dispatchers.IO) {
+                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                if (auth.currentUser == null) auth.signInAnonymously()
+            }
 
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
+
 
             if (savedInstanceState != null) {
                 pendingEditId = savedInstanceState.getLong("editing_id", 0L)
@@ -105,13 +114,15 @@
             val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
             val isSetupDone = prefs.getBoolean("policy_accepted", false) && CurrencyHelper.isCurrencySet(this)
 
-            observeViewModel()
+            // FIX: Defer heavy ViewModel instantiation and DB checks until AFTER the first frame draws
+            binding.root.post {
+                observeViewModel()
 
-            if (isSetupDone) {
-                checkMonthlyCheckpoint()
-                checkBackupReminder()
-                checkFeatureDiscovery()
-                checkForUpdates()
+                if (isSetupDone) {
+                    checkMonthlyCheckpoint()
+                    checkBackupReminder()
+                    checkForUpdates()
+                }
             }
 
             onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -141,23 +152,87 @@
             val policyAccepted = prefs.getBoolean("policy_accepted", false)
             val currencySet = CurrencyHelper.isCurrencySet(this)
 
-            if (!policyAccepted) {
-                if (!isOnboardingShowing) checkFirstLaunchFlow()
-            } else if (!currencySet) {
-                if (!isOnboardingShowing) checkCurrencySetup()
-            } else {
-                // Only refresh and check for updates IF setup is complete
-                viewModel.refreshData()
-                runSync()
-                checkForUpdates()
-            }
+            // FIX: Defer data loading and secondary setups to allow instantaneous UI rendering
+            binding.root.post {
+                if (!policyAccepted) {
+                    if (!isOnboardingShowing) checkFirstLaunchFlow()
+                } else if (!currencySet) {
+                    if (!isOnboardingShowing) checkCurrencySetup()
+                } else {
+                    // Only refresh and check for updates IF setup is complete
+                    viewModel.refreshData()
+                    runSync()
+                    checkForUpdates()
+                    startGuidedTutorial()
+                }
 
-            // Check for downloaded background updates
-            appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
-                if (info.installStatus() == InstallStatus.DOWNLOADED) {
-                    showUpdateFinishedSnackbar()
+                // Check for downloaded background updates
+                appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
+                    if (info.installStatus() == InstallStatus.DOWNLOADED) {
+                        showUpdateFinishedSnackbar()
+                    }
                 }
             }
+        }
+        private fun startGuidedTutorial() {
+            val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("is_first_launch", true)) return
+
+            TapTargetSequence(this)
+                .targets(
+                    TapTarget.forView(binding.btnPlus, "Add Income", "Tap '+' to log money earned instantly.")
+                        .outerCircleColor(R.color.income_green)
+                        .targetCircleColor(R.color.white)
+                        .titleTextSize(20)
+                        .descriptionTextSize(14)
+                        .descriptionTextColor(R.color.text_primary)
+                        .drawShadow(true)
+                        .cancelable(false)
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.btnMinus, "Log Expenses", "Tap '-' to track your spending.")
+                        .outerCircleColor(R.color.expense_red)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.cardBalance, "Financial Insights", "Tap your balance to view your cash flow map and performance stats.")
+                        .outerCircleColor(R.color.accent_calm)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true),
+
+                    TapTarget.forView(binding.btnSend, "Advanced Logging", "Hold the Send button to discover Asset and Liability options.")
+                        .outerCircleColor(R.color.accent_calm)
+                        .targetCircleColor(R.color.white)
+                        // FIX: Punch a clear hole to preserve native icon contrast
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.btnSend, "What are Assets?", "Use ASSET when you lend money. It keeps your balance accurate while tracking what is owed back to you.")
+                        .outerCircleColor(R.color.income_muted)
+                        .targetCircleColor(R.color.white)
+                        // FIX: Punch a clear hole to preserve native icon contrast
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.btnSend, "What are Liabilities?", "Use LIABILITY when you borrow money. It records the cash arrival while marking it as a debt to repay.")
+                        .outerCircleColor(R.color.expense_muted)
+                        .targetCircleColor(R.color.white)
+                        // FIX: Punch a clear hole to preserve native icon contrast
+                        .transparentTarget(true)
+                        .tintTarget(false)
+                ) // <--- Clean closing parenthesis
+                .listener(object : TapTargetSequence.Listener {
+                    override fun onSequenceFinish() {
+                        prefs.edit().putBoolean("is_first_launch", false).apply()
+                    }
+                    override fun onSequenceStep(lastTarget: TapTarget, targetClicked: Boolean) {}
+                    override fun onSequenceCanceled(lastTarget: TapTarget) {
+                        prefs.edit().putBoolean("is_first_launch", false).apply()
+                    }
+                })
+                .start()
         }
 
         override fun onSaveInstanceState(outState: Bundle) {
@@ -189,7 +264,7 @@
                 }
 
                 if (list.isEmpty()) {
-                    binding.tvEmptyState.text = "Try +7000"
+                    binding.tvEmptyState.text = "No records yet. Add income or expense to begin"
                     binding.tvEmptyState.visibility = View.VISIBLE
                     binding.rvTransactions.visibility = View.GONE
                 } else {
@@ -988,7 +1063,11 @@
                     isOnboardingShowing = false
                     CurrencyHelper.setCurrency(this, currencies[which])
                     viewModel.refreshData()
-                    if(isFirstLaunch) checkMonthlyCheckpoint()
+                    if(isFirstLaunch) {
+                        checkMonthlyCheckpoint()
+                        // FIX: Trigger tutorial immediately after setup completes, waiting for UI to render
+                        binding.root.post { startGuidedTutorial() }
+                    }
                 }.show()
         }
 
@@ -1031,64 +1110,6 @@
                     }
                     .show()
             }
-        }
-
-        // --- NEW: ONE-TIME FEATURE DISCOVERY HINT ---
-        private fun checkFeatureDiscovery() {
-            val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
-            val hasSeenHint = prefs.getBoolean("seen_long_press_hint", false)
-
-            if (!hasSeenHint) {
-                // Delay slightly to ensure UI is ready and user is looking
-                Handler(Looper.getMainLooper()).postDelayed({
-                    try {
-                        showDiscoveryBubble()
-                        prefs.edit().putBoolean("seen_long_press_hint", true).apply()
-                    } catch (e: Exception) { e.printStackTrace() }
-                }, 1000)
-            }
-        }
-
-        private fun showDiscoveryBubble() {
-            // Reuse your Bubble styling
-            val context = this
-            val container = android.widget.LinearLayout(context).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                background = ContextCompat.getDrawable(context, R.drawable.bg_message_card)
-                setPadding(32, 24, 32, 24)
-                elevation = 24f
-            }
-
-            val text = TextView(context).apply {
-                text = "Tip: Long-press Send for Assets & Liabilities"
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            }
-            container.addView(text)
-
-            val popup = android.widget.PopupWindow(
-                container,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                true // Focusable so clicking outside dismisses it
-            )
-            popup.elevation = 24f
-
-            // Show it anchored to the Send button
-            // Calculate offset to show ABOVE the button
-            container.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-            val popupHeight = container.measuredHeight
-            val popupWidth = container.measuredWidth
-            val anchor = binding.btnSend
-            val xOff = -(popupWidth - anchor.width) / 2
-            val yOff = -(anchor.height + popupHeight + 16)
-
-            popup.showAsDropDown(anchor, xOff, yOff)
-
-            // Auto-dismiss after 5 seconds
-            Handler(Looper.getMainLooper()).postDelayed({
-                if (popup.isShowing) popup.dismiss()
-            }, 5000)
         }
 
         private fun isNetworkAvailable(): Boolean {

@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
         targetSdk = 35
-        versionCode = 156
-        versionName = "2.9.5"
+        versionCode = 162
+        versionName = "3.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -86,4 +86,7 @@ dependencies {
 
     implementation("com.google.android.material:material:1.13.0")
     implementation("com.google.firebase:firebase-auth-ktx")
+
+    implementation("com.getkeepsafe.taptargetview:taptargetview:1.13.3")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 }
