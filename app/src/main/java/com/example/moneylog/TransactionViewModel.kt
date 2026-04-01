@@ -19,8 +19,8 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     private val _transactions = MutableLiveData<List<Transaction>>()
     val transactions: LiveData<List<Transaction>> = _transactions
 
-    private val _totalBalance = MutableLiveData<Double>()
-    val totalBalance: LiveData<Double> = _totalBalance
+    private val _totalBalance = MutableLiveData<Long>()
+    val totalBalance: LiveData<Long> = _totalBalance
 
     private val _assets = MutableLiveData<List<Transaction>>()
     val assets: LiveData<List<Transaction>> = _assets
@@ -28,11 +28,11 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     private val _liabilities = MutableLiveData<List<Transaction>>()
     val liabilities: LiveData<List<Transaction>> = _liabilities
 
-    private val _totalAssets = MutableLiveData<Double>()
-    val totalAssets: LiveData<Double> = _totalAssets
+    private val _totalAssets = MutableLiveData<Long>()
+    val totalAssets: LiveData<Long> = _totalAssets
 
-    private val _totalLiabilities = MutableLiveData<Double>()
-    val totalLiabilities: LiveData<Double> = _totalLiabilities
+    private val _totalLiabilities = MutableLiveData<Long>()
+    val totalLiabilities: LiveData<Long> = _totalLiabilities
 
     private val _performanceStats = MutableLiveData<PerformanceStats>()
     val performanceStats: LiveData<PerformanceStats> = _performanceStats
@@ -45,9 +45,12 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         _transactions.value?.let { calculatePerformanceStats(it) }
     }
 
+    // FIX: Declare property ABOVE the init block to ensure it is instantiated before use
+    private var currentQuery = ""
+
     init {
         val db = Room.databaseBuilder(application, AppDatabase::class.java, "moneylog-db")
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3) // Register BOTH migrations
             .build()
         val syncManager = SyncManager(application, db)
         repository = TransactionRepository(db, syncManager)
@@ -56,21 +59,11 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun refreshData() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val list = repository.getAllTransactions()
-            val total = list.filter { it.nature == "NORMAL" }.sumOf { it.amount }
-
-            withContext(Dispatchers.Main) {
-                _transactions.value = list
-                _totalBalance.value = total
-            }
-
-            // RUN OUR NEW CALCULATION ENGINE IN THE BACKGROUND
-            calculatePerformanceStats(list)
-        }
+        // FIX: Delegate to search to re-apply active filters when DB updates occur
+        search(currentQuery)
     }
 
-    fun addTransaction(originalText: String, amount: Double, desc: String, nature: String) {
+    fun addTransaction(originalText: String, amount: Long, desc: String, nature: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val obligation = calculateObligation(amount, nature)
 
@@ -108,8 +101,8 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
 
     // Helper logic to keep Add/Edit consistent
 
-    // FIX: Pure Inversion Logic
-    private fun calculateObligation(amount: Double, nature: String): Double {
+    // FIX: Pure Inversion Logic using Long
+    private fun calculateObligation(amount: Long, nature: String): Long {
         return when (nature) {
             "ASSET", "LIABILITY" -> {
                 // Simply invert the sign.
@@ -118,7 +111,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
                 -amount
             }
 
-            else -> 0.0
+            else -> 0L
         }
     }
 
@@ -126,14 +119,11 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch(Dispatchers.IO) {
             val assetList = repository.getAssets()
             val liabilityList = repository.getLiabilities()
-            val assetTotal = repository.getTotalAssets()
-            val liabilityTotal = repository.getTotalLiabilities()
 
             withContext(Dispatchers.Main) {
                 _assets.value = assetList
                 _liabilities.value = liabilityList
-                _totalAssets.value = assetTotal ?: 0.0
-                _totalLiabilities.value = liabilityTotal ?: 0.0
+                // FIX: Removed unused aggregate DB queries. AssetsLiabilitiesActivity calculates this dynamically.
             }
         }
     }
@@ -146,26 +136,38 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun search(query: String) {
+        currentQuery = query
         viewModelScope.launch(Dispatchers.IO) {
-            val results = repository.search(query)
+            val results = if (query.isNotEmpty()) repository.search(query) else repository.getAllTransactions()
             val searchTotal = results.sumOf { it.amount }
 
             withContext(Dispatchers.Main) {
                 _transactions.value = results
                 _totalBalance.value = searchTotal
             }
+
+            // FIX: Ensure dashboard stats are always calculated against the full DB, not the filtered list
+            val fullList = if (query.isNotEmpty()) repository.getAllTransactions() else results
+            calculatePerformanceStats(fullList)
         }
     }
 
     fun importTransactionList(list: List<Transaction>) {
         viewModelScope.launch(Dispatchers.IO) {
-            for (t in list) {
-                // FIX: Removed 60-second window. Now checks Exact Match (Timestamp + Amount + Desc)
-                // This prevents legitimate simultaneous purchases from being discarded.
-                val count = repository.checkDuplicate(t.amount, t.description, t.timestamp)
-                if (count == 0) {
-                    repository.insert(t)
-                }
+            // 1. Fetch all existing records to memory for lightning-fast O(1) lookups
+            val existing = repository.getAllTransactions()
+            // FIX: Use ONLY timestamp as the unique signature. Using mutable fields (amount/desc)
+            // causes edited transactions to be double-counted as "new" during future CSV restores.
+            val existingSigs = existing.map { it.timestamp.toString() }.toHashSet()
+
+            // 2. Filter out duplicates in-memory (No database I/O required)
+            val toInsert = list.filter { t ->
+                !existingSigs.contains(t.timestamp.toString())
+            }
+
+            // 3. Batch insert everything at once
+            if (toInsert.isNotEmpty()) {
+                repository.insertAll(toInsert)
             }
             refreshData()
         }
@@ -193,30 +195,30 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             val currentWeek = now.get(java.util.Calendar.WEEK_OF_YEAR)
             val currentMonth = now.get(java.util.Calendar.MONTH)
 
-            var todayNet = 0.0
-            var todayCredits = 0.0
-            var todayDebits = 0.0
-            var weekNet = 0.0
-            var weekCredits = 0.0
-            var weekDebits = 0.0
-            var monthNet = 0.0
-            var monthCredits = 0.0
-            var monthDebits = 0.0
+            var todayNet = 0L
+            var todayCredits = 0L
+            var todayDebits = 0L
+            var weekNet = 0L
+            var weekCredits = 0L
+            var weekDebits = 0L
+            var monthNet = 0L
+            var monthCredits = 0L
+            var monthDebits = 0L
 
-            val sortedList = list.filter { it.nature == "NORMAL" }.sortedBy { it.timestamp }
+            val sortedList = list.sortedBy { it.timestamp }
             if (sortedList.isEmpty()) {
                 withContext(Dispatchers.Main) { _performanceStats.value = PerformanceStats() }
                 return@launch
             }
 
+            val dayCalc = java.util.Calendar.getInstance()
             val allDays = sortedList.map {
-                val c = java.util.Calendar.getInstance()
-                c.timeInMillis = it.timestamp
-                c.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                c.set(java.util.Calendar.MINUTE, 0)
-                c.set(java.util.Calendar.SECOND, 0)
-                c.set(java.util.Calendar.MILLISECOND, 0)
-                c.timeInMillis
+                dayCalc.timeInMillis = it.timestamp
+                dayCalc.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                dayCalc.set(java.util.Calendar.MINUTE, 0)
+                dayCalc.set(java.util.Calendar.SECOND, 0)
+                dayCalc.set(java.util.Calendar.MILLISECOND, 0)
+                dayCalc.timeInMillis
             }.distinct()
 
             val selectedStart = _dateRange.value?.first ?: allDays.first()
@@ -229,17 +231,22 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
                 endCal.timeInMillis - 1L
             }
 
-            var periodNet = 0.0
-            var periodCredits = 0.0
-            var periodDebits = 0.0
-            var runningBalance = 0.0
+            var periodNet = 0L
+            var periodCredits = 0L
+            var periodDebits = 0L
+            var runningBalance = 0L
             val timelineList = mutableListOf<TimelineItem>()
             val cal = java.util.Calendar.getInstance()
 
             // 1. RUN THE CALCULATION LOOP
             for (t in sortedList) {
+                // Running balance (Cash in Hand) must ALWAYS include all cash flows (Loans/Assets)
                 runningBalance += t.amount
                 cal.timeInMillis = t.timestamp
+
+                // FIX: To match the Main Balance (Cash-Basis), all cash flows must be included.
+                // Removing the 'isNormal' filter ensures the Net reflects actual Cash in Hand
+                // by accounting for the cash-outflow of Assets (-₹645) and inflow of Liabilities.
 
                 if (cal.get(java.util.Calendar.YEAR) == currentYear) {
                     if (cal.get(java.util.Calendar.DAY_OF_YEAR) == currentDay) {

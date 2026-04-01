@@ -60,6 +60,7 @@ class TimelineMapView @JvmOverloads constructor(
             return true
         }
     })
+    private lateinit var timelinePath: Path
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled) return false
@@ -157,23 +158,19 @@ class TimelineMapView @JvmOverloads constructor(
         canvas.concat(transformMatrix)
         if (pointMap.isEmpty()) { canvas.restore(); return }
 
-        // Update the Path drawing block in your onDraw() function:
-        val path = Path().apply { moveTo(pointMap.first().x, pointMap.first().y) }
+        // FIX: Reuse a single Path object to prevent GC thrashing at 60fps
+        if (!::timelinePath.isInitialized) timelinePath = Path()
+        timelinePath.reset()
+        timelinePath.moveTo(pointMap.first().x, pointMap.first().y)
+
         for (i in 0 until pointMap.size - 1) {
             val p1 = pointMap[i]
             val p2 = pointMap[i+1]
 
-            // HIGH-TENSION BEZIER LOGIC
-            // Multiplier (0.8f) makes the curves "overshoot" vertically, creating aggressive bends.
             val tension = (p2.y - p1.y) * 0.8f
-
-            path.cubicTo(
-                p1.x, p1.y + tension, // Control Point 1: Pulls down from current point
-                p2.x, p2.y - tension, // Control Point 2: Pulls up into next point
-                p2.x, p2.y
-            )
+            timelinePath.cubicTo(p1.x, p1.y + tension, p2.x, p2.y - tension, p2.x, p2.y)
         }
-        canvas.drawPath(path, pathPaint)
+        canvas.drawPath(timelinePath, pathPaint)
 
         // 3. Draw Waypoints & Multi-Layered Text
         for (i in items.indices) {
@@ -192,6 +189,7 @@ class TimelineMapView @JvmOverloads constructor(
             // Layer 2: Amount (Color-Matched)
             textAmountPaint.color = paint.color
             val amtStr = if (item.amount > 0) "+ $symbol ${fmt(item.amount)}" else "- $symbol ${fmt(abs(item.amount))}"
+
             canvas.drawText(amtStr, labelX, point.y + 35f, textAmountPaint)
 
             // Layer 3: Balance & Date (Secondary Grey)
@@ -202,7 +200,16 @@ class TimelineMapView @JvmOverloads constructor(
         canvas.restore()
     }
 
-    private fun fmt(d: Double) = if (d % 1.0 == 0.0) d.toLong().toString() else String.format("%.2f", d)
+    // Hoisted reusable formatter
+    private val numberFormatter = java.text.NumberFormat.getInstance(java.util.Locale.getDefault()).apply {
+        minimumFractionDigits = 0
+        maximumFractionDigits = 2
+    }
+
+    private fun fmt(cents: Long): String {
+        val d = cents / 100.0
+        return numberFormatter.format(d)
+    }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)

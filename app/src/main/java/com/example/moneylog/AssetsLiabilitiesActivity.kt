@@ -137,12 +137,24 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
         // 4. Update UI
         if (isAssetsTab) {
             binding.tvTotalLabel.text = if(currentSearchQuery.isEmpty()) "TOTAL TO RECEIVE" else "TOTAL FROM '${currentSearchQuery.uppercase()}'"
-            binding.tvTotalValue.text = "$symbol ${fmt(dynamicTotal)}"
-            binding.tvTotalValue.setTextColor(ContextCompat.getColor(this, R.color.income_green))
+            if (dynamicTotal < 0) {
+                // FIX: If negative on Assets, they overpaid you. You owe them a refund.
+                binding.tvTotalValue.text = "$symbol ${fmt(abs(dynamicTotal))} (Refund Due)"
+                binding.tvTotalValue.setTextColor(ContextCompat.getColor(this, R.color.expense_red))
+            } else {
+                binding.tvTotalValue.text = "$symbol ${fmt(dynamicTotal)}"
+                binding.tvTotalValue.setTextColor(ContextCompat.getColor(this, R.color.income_green))
+            }
         } else {
             binding.tvTotalLabel.text = if(currentSearchQuery.isEmpty()) "TOTAL TO PAY" else "TOTAL TO '${currentSearchQuery.uppercase()}'"
-            binding.tvTotalValue.text = "$symbol ${fmt(abs(dynamicTotal))}"
-            binding.tvTotalValue.setTextColor(ContextCompat.getColor(this, R.color.expense_red))
+            if (dynamicTotal > 0) {
+                // FIX: If positive on Liabilities, you overpaid. They owe you a refund.
+                binding.tvTotalValue.text = "$symbol ${fmt(dynamicTotal)} (Overpaid)"
+                binding.tvTotalValue.setTextColor(ContextCompat.getColor(this, R.color.income_green))
+            } else {
+                binding.tvTotalValue.text = "$symbol ${fmt(abs(dynamicTotal))}"
+                binding.tvTotalValue.setTextColor(ContextCompat.getColor(this, R.color.expense_red))
+            }
         }
 
         // 5. Update Adapter
@@ -201,7 +213,12 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun fmt(d: Double): String {
-        return if (d % 1.0 == 0.0) d.toLong().toString() else String.format("%.2f", d)
+    private fun fmt(cents: Long): String {
+        val d = cents / 100.0
+        val formatter = java.text.NumberFormat.getInstance(java.util.Locale.getDefault()).apply {
+            minimumFractionDigits = 0
+            maximumFractionDigits = 2
+        }
+        return formatter.format(d)
     }
 }

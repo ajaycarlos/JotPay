@@ -112,43 +112,61 @@
             }
         }
 
+        // FIX: Silent Auth Wrapper to ensure operations only execute after authentication
+        private fun ensureAuth(onSuccess: () -> Unit) {
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            if (auth.currentUser != null) {
+                onSuccess()
+            } else {
+                auth.signInAnonymously()
+                    .addOnSuccessListener { onSuccess() }
+                    .addOnFailureListener {
+                        Toast.makeText(this, "Network Error: Cannot connect to Sync Server", Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+
         private fun registerDeviceOnServer(vaultId: String) {
             if (!isOnline()) return
             val installId = syncManager.getInstallationId()
             val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
 
-            // Write: vaults/{id}/devices/{installId} = "Pixel 7"
-            FirebaseDatabase.getInstance().getReference("vaults")
-                .child(vaultId)
-                .child("devices")
-                .child(installId)
-                .setValue(deviceName)
+            ensureAuth {
+                // Write: vaults/{id}/devices/{installId} = "Pixel 7"
+                FirebaseDatabase.getInstance().getReference("vaults")
+                    .child(vaultId)
+                    .child("devices")
+                    .child(installId)
+                    .setValue(deviceName)
+            }
         }
 
         private fun listenForDeviceCount(vaultId: String) {
-            val ref = FirebaseDatabase.getInstance().getReference("vaults")
-                .child(vaultId)
-                .child("devices")
+            ensureAuth {
+                val ref = FirebaseDatabase.getInstance().getReference("vaults")
+                    .child(vaultId)
+                    .child("devices")
 
-            deviceListener = ref.addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val count = snapshot.childrenCount
+                deviceListener = ref.addValueEventListener(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val count = snapshot.childrenCount
 
-                    // Update UI based on count
-                    if (count > 1) {
-                        binding.tvLinkedCount.text = "$count Devices Linked"
-                        binding.btnUnlink.visibility = View.VISIBLE
-                        binding.btnUnlink.text = "Unlink This Device"
-                    } else {
-                        binding.tvLinkedCount.text = "1 Device (This Phone)"
-                        // If we are the only one, 'Unlink' effectively just resets us.
-                        // We can show it or hide it. Let's show it to allow "Reset".
-                        binding.btnUnlink.visibility = View.VISIBLE
-                        binding.btnUnlink.text = "Reset Sync ID"
+                        // Update UI based on count
+                        if (count > 1) {
+                            binding.tvLinkedCount.text = "$count Devices Linked"
+                            binding.btnUnlink.visibility = View.VISIBLE
+                            binding.btnUnlink.text = "Unlink This Device"
+                        } else {
+                            binding.tvLinkedCount.text = "1 Device (This Phone)"
+                            // If we are the only one, 'Unlink' effectively just resets us.
+                            // We can show it or hide it. Let's show it to allow "Reset".
+                            binding.btnUnlink.visibility = View.VISIBLE
+                            binding.btnUnlink.text = "Reset Sync ID"
+                        }
                     }
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            })
+                    override fun onCancelled(error: DatabaseError) {}
+                })
+            }
         }
 
         private fun unlinkThisDevice() {
@@ -160,29 +178,31 @@
             val installId = syncManager.getInstallationId()
             val oldVaultId = currentVaultId ?: return
 
-            // 1. Remove myself from Server List
-            FirebaseDatabase.getInstance().getReference("vaults")
-                .child(oldVaultId)
-                .child("devices")
-                .child(installId)
-                .removeValue()
-                .addOnCompleteListener {
-                    // FIX 10: Lifecycle Guard
-                    // If activity is destroyed (e.g., user rotated screen or left), don't touch UI
-                    if (isDestroyed || isFinishing) return@addOnCompleteListener
+            ensureAuth {
+                // 1. Remove myself from Server List
+                FirebaseDatabase.getInstance().getReference("vaults")
+                    .child(oldVaultId)
+                    .child("devices")
+                    .child(installId)
+                    .removeValue()
+                    .addOnCompleteListener {
+                        // FIX 10: Lifecycle Guard
+                        // If activity is destroyed (e.g., user rotated screen or left), don't touch UI
+                        if (isDestroyed || isFinishing) return@addOnCompleteListener
 
-                    // 2. Clear Local Data & Generate New ID
-                    syncManager.unlinkDevice()
-                    Toast.makeText(this, "Unlinked. You are now on a fresh account.", Toast.LENGTH_LONG).show()
+                        // 2. Clear Local Data & Generate New ID
+                        syncManager.unlinkDevice()
+                        Toast.makeText(this@LinkDeviceActivity, "Unlinked. You are now on a fresh account.", Toast.LENGTH_LONG).show()
 
-                    // 3. Restart Activity Cleanly
-                    // FIX 10: Use flags to clear the entire back stack and start fresh.
-                    // This prevents memory leaks and ensures no "ghost" activities remain.
-                    val intent = Intent(this, LinkDeviceActivity::class.java)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    startActivity(intent)
-                    finish()
-                }
+                        // 3. Restart Activity Cleanly
+                        // FIX 10: Use flags to clear the entire back stack and start fresh.
+                        // This prevents memory leaks and ensures no "ghost" activities remain.
+                        val intent = Intent(this@LinkDeviceActivity, LinkDeviceActivity::class.java)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        startActivity(intent)
+                        finish()
+                    }
+            }
         }
 
         override fun onDestroy() {

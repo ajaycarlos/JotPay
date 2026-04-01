@@ -57,6 +57,7 @@
         private lateinit var adapter: TransactionAdapter
         private var editingTransaction: Transaction? = null
         private var pendingEditId: Long = 0L
+        private var pendingEditText: String = "" // FIX: Variable to hold text during rotation
         private var balanceAnimator: ValueAnimator? = null
         private var currentDisplayedBalance = 0.0
         private lateinit var appUpdateManager: AppUpdateManager
@@ -78,12 +79,20 @@
             // Force Dark Mode for consistent UI
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
 
+
+
             super.onCreate(savedInstanceState)
+
+            // FIX: Pre-warm Anonymous Auth silently on app launch so SyncWorker runs instantly later
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            if (auth.currentUser == null) auth.signInAnonymously()
+
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
 
             if (savedInstanceState != null) {
                 pendingEditId = savedInstanceState.getLong("editing_id", 0L)
+                pendingEditText = savedInstanceState.getString("editing_text", "") // FIX: Extract saved text
             }
 
             setupRecyclerView()
@@ -118,12 +127,12 @@
         }
 
         private fun closeSearchBar() {
-            binding.etSearch.text.clear()
+            binding.etSearch.text.clear() // Triggers TextWatcher which updates the ViewModel safely
             binding.etSearch.visibility = View.GONE
             binding.btnCloseSearch.visibility = View.GONE
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             imm.hideSoftInputFromWindow(binding.etSearch.windowToken, 0)
-            viewModel.refreshData()
+            // FIX: Removed redundant viewModel.refreshData() to prevent DB race condition
         }
 
         override fun onResume() {
@@ -155,6 +164,8 @@
             super.onSaveInstanceState(outState)
             editingTransaction?.let {
                 outState.putLong("editing_id", it.timestamp)
+                // FIX: Save the actual typed text so it survives the Activity destruction
+                outState.putString("editing_text", binding.etInput.text.toString())
             }
         }
 
@@ -167,7 +178,13 @@
                     val target = list.find { it.timestamp == pendingEditId }
                     if (target != null) {
                         startEditing(target)
+                        // FIX: Restore user's in-progress text instead of overwriting with original text
+                        if (pendingEditText.isNotEmpty()) {
+                            binding.etInput.setText(pendingEditText)
+                            binding.etInput.setSelection(pendingEditText.length)
+                        }
                         pendingEditId = 0L
+                        pendingEditText = ""
                     }
                 }
 
@@ -181,8 +198,8 @@
                 }
             }
 
-            viewModel.totalBalance.observe(this) { total ->
-                val finalTotal = total ?: 0.0
+            viewModel.totalBalance.observe(this) { totalCents ->
+                val finalTotal = (totalCents ?: 0L) / 100.0
                 val symbol = CurrencyHelper.getSymbol(this)
 
                 // FIX: Determine if search is active to adjust UI
@@ -197,26 +214,28 @@
                 balanceAnimator?.cancel()
                 balanceAnimator = null
 
+                val formatter = java.text.NumberFormat.getInstance(Locale.getDefault()).apply {
+                    minimumFractionDigits = 0
+                    maximumFractionDigits = 2
+                }
+
                 if (currentDisplayedBalance != targetValue) {
                     val animator = ValueAnimator.ofObject(DoubleEvaluator(), currentDisplayedBalance, targetValue)
                     animator.duration = 500
                     animator.addUpdateListener { animation ->
                         val animatedValue = animation.animatedValue as Double
-                        val formattedValue = if (animatedValue % 1.0 == 0.0) animatedValue.toLong().toString() else String.format("%.1f", animatedValue)
-                        binding.tvTotalBalance.text = "$symbol $formattedValue"
+                        binding.tvTotalBalance.text = "$symbol ${formatter.format(animatedValue)}"
                     }
                     animator.addListener(object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: android.animation.Animator) {
-                            val formattedValue = if (targetValue % 1.0 == 0.0) targetValue.toLong().toString() else String.format("%.1f", targetValue)
-                            binding.tvTotalBalance.text = "$symbol $formattedValue"
+                            binding.tvTotalBalance.text = "$symbol ${formatter.format(targetValue)}"
                         }
                     })
                     animator.start()
                     balanceAnimator = animator
                     currentDisplayedBalance = targetValue
                 } else {
-                    val formattedValue = if (targetValue % 1.0 == 0.0) targetValue.toLong().toString() else String.format("%.1f", targetValue)
-                    binding.tvTotalBalance.text = "$symbol $formattedValue"
+                    binding.tvTotalBalance.text = "$symbol ${formatter.format(targetValue)}"
                 }
                 binding.tvTotalBalance.setTextColor(android.graphics.Color.WHITE)
             }
@@ -339,7 +358,13 @@
             }
         }
 
+        private var lastClickTime = 0L
+
         private fun handleInput(nature: String) {
+            // FIX: True time-based debounce to prevent rapid double-tap duplicate injections
+            if (System.currentTimeMillis() - lastClickTime < 500) return
+            lastClickTime = System.currentTimeMillis()
+
             val rawText = binding.etInput.text.toString().trim()
             val parsed = parseTransactionInput(rawText)
 
@@ -383,7 +408,7 @@
         }
 
         // FIX 2: Completely rewritten to handle "Amount First" logic with spaces (e.g. "50 + 50 Lunch")
-        private fun parseTransactionInput(text: String): Pair<Double, String>? {
+        private fun parseTransactionInput(text: String): Pair<Long, String>? {
             if (text.isBlank()) return null
 
             // Strategy 1: "Amount First" (Math Expression at start)
@@ -397,7 +422,7 @@
                     val result = evaluateMath(mathPart) ?: mathPart.toDoubleOrNull()
                     if (result != null) {
                         val desc = if (potentialDesc.isNotEmpty()) potentialDesc.replaceFirstChar { it.uppercase() } else "General"
-                        return Pair(result, desc)
+                        return Pair(Math.round(result * 100.0), desc)
                     }
                 }
             }
@@ -411,7 +436,7 @@
                 if (lastEval != null) {
                     val descPart = text.substring(0, lastSpace).trim()
                     val desc = if (descPart.isNotEmpty()) descPart.replaceFirstChar { it.uppercase() } else "General"
-                    return Pair(lastEval, desc)
+                    return Pair(Math.round(lastEval * 100.0), desc)
                 }
             }
             return null
@@ -475,9 +500,29 @@
                     var skippedCount = 0
 
                     while (line != null) {
-                        // Regex handles CSVs with quoted strings containing commas
-                        val tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
-                            .map { it.trim().removeSurrounding("\"").replace("\"\"", "\"") }
+                        // FIX: Safe linear-time manual CSV parser to prevent Regex Denial of Service (ReDoS)
+                        val tokens = ArrayList<String>()
+                        val currentToken = java.lang.StringBuilder()
+                        var inQuotes = false
+                        var i = 0
+                        while (i < line.length) {
+                            val c = line[i]
+                            if (c == '"') {
+                                if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                                    currentToken.append('"') // Handle escaped quote ""
+                                    i++
+                                } else {
+                                    inQuotes = !inQuotes
+                                }
+                            } else if (c == ',' && !inQuotes) {
+                                tokens.add(currentToken.toString().trim())
+                                currentToken.clear()
+                            } else {
+                                currentToken.append(c)
+                            }
+                            i++
+                        }
+                        tokens.add(currentToken.toString().trim())
 
                         if (tokens.size >= 4) {
                             val dateStr = "${tokens[0]} ${tokens[1]}"
@@ -523,11 +568,11 @@
 
                                 importList.add(Transaction(
                                     originalText = "$fmtAmount $desc",
-                                    amount = amount,
+                                    amount = Math.round(amount * 100.0),
                                     description = desc,
                                     timestamp = timestamp,
                                     nature = nature,
-                                    obligationAmount = obligation
+                                    obligationAmount = Math.round(obligation * 100.0)
                                 ))
                             }
                         }
@@ -586,7 +631,8 @@
             binding.etSearch.addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) {
                     val query = s.toString().trim()
-                    if (query.isNotEmpty()) viewModel.search(query) else viewModel.refreshData()
+                    // FIX: Always route through search to maintain active query state sync
+                    viewModel.search(query)
                 }
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -669,21 +715,28 @@
         }
 
         private fun updateAutocomplete(list: List<Transaction>) {
-            val frequencyMap = HashMap<String, HashMap<String, Int>>()
-            for (t in list) {
-                val amountStr = if (t.amount % 1.0 == 0.0) t.amount.toLong().toString() else t.amount.toString()
-                val map = frequencyMap.getOrDefault(amountStr, HashMap())
-                val count = map.getOrDefault(t.description, 0)
-                map[t.description] = count + 1
-                frequencyMap[amountStr] = map
+            // FIX: Offload heavy grouping, formatting, and sorting to background thread
+            lifecycleScope.launch(Dispatchers.Default) {
+                val frequencyMap = HashMap<String, HashMap<String, Int>>()
+                val formatter = java.text.NumberFormat.getInstance(Locale.getDefault()).apply { minimumFractionDigits = 0; maximumFractionDigits = 2 }
+                for (t in list) {
+                    val amountStr = formatter.format(t.amount / 100.0)
+                    val map = frequencyMap.getOrDefault(amountStr, HashMap())
+                    val count = map.getOrDefault(t.description, 0)
+                    map[t.description] = count + 1
+                    frequencyMap[amountStr] = map
+                }
+                val suggestions = ArrayList<String>()
+                for ((amount, descMap) in frequencyMap) {
+                    val topDesc = descMap.maxByOrNull { it.value }
+                    if (topDesc != null && topDesc.value >= 2) suggestions.add("$amount ${topDesc.key}")
+                }
+
+                withContext(Dispatchers.Main) {
+                    val adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, suggestions)
+                    binding.etInput.setAdapter(adapter)
+                }
             }
-            val suggestions = ArrayList<String>()
-            for ((amount, descMap) in frequencyMap) {
-                val topDesc = descMap.maxByOrNull { it.value }
-                if (topDesc != null && topDesc.value >= 2) suggestions.add("$amount ${topDesc.key}")
-            }
-            val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, suggestions)
-            binding.etInput.setAdapter(adapter)
         }
 
         private fun evaluateMath(expression: String): Double? {
@@ -762,13 +815,14 @@
                     val parsed = parseTransactionInput(text)
 
                     if (parsed != null) {
-                        val (amount, desc) = parsed
+                        val (amountCents, desc) = parsed
+                        val amount = amountCents / 100.0
                         val type = if (amount >= 0) "Credit" else "Debit"
                         val absAmount = abs(amount)
                         val cleanDesc = if(desc.isBlank()) "..." else desc
                         val symbol = CurrencyHelper.getSymbol(this@MainActivity)
-                        val fmtAmount = if (absAmount % 1.0 == 0.0) absAmount.toLong().toString() else String.format("%.1f", absAmount)
-                        binding.tvInputPreview.text = "$type $symbol$fmtAmount · $cleanDesc"
+                        val formatter = java.text.NumberFormat.getInstance(Locale.getDefault()).apply { minimumFractionDigits = 0; maximumFractionDigits = 2 }
+                        binding.tvInputPreview.text = "$type $symbol${formatter.format(absAmount)} · $cleanDesc"
                         binding.tvInputPreview.visibility = View.VISIBLE
                     } else binding.tvInputPreview.visibility = View.GONE
                 }
@@ -834,7 +888,10 @@
                 val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
                 val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
                 val symbol = CurrencyHelper.getSymbol(applicationContext)
-                fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
+                fun fmt(d: Long): String {
+                    val v = d / 100.0
+                    return if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+                }
 
                 if (isCsv) {
                     sb.append("Date,Time,Amount,Description,Nature,Obligation,Timestamp\n")
@@ -898,23 +955,27 @@
                 cal.add(Calendar.MONTH, 1); cal.set(Calendar.DAY_OF_MONTH, 1)
                 val end = cal.timeInMillis
 
+                // FIX: Remove redundant DB creation. Defer execution to prevent cold-start blockage.
                 lifecycleScope.launch(Dispatchers.IO) {
-                    val tempDb = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "moneylog-db").build()
-                    val list = tempDb.transactionDao().getAll()
+                    // Using the existing ViewModel/Repository prevents the overhead of building a second DB instance
+                    val list = viewModel.transactions.value ?: return@launch
                     val prevMonthList = list.filter { it.timestamp in start until end }
 
                     if (prevMonthList.isNotEmpty()) {
-                        val sum = prevMonthList.sumOf { it.amount }
+                        val sumCents = prevMonthList.sumOf { it.amount }
                         val prevMonthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date(start))
                         withContext(Dispatchers.Main) {
                             val symbol = CurrencyHelper.getSymbol(this@MainActivity)
-                            val fmtSum = if (sum % 1.0 == 0.0) sum.toLong().toString() else String.format("%.1f", sum)
-                            binding.tvMonthlySummary.text = "Last month ($prevMonthName): $symbol $fmtSum"
+                            val formatter = java.text.NumberFormat.getInstance(Locale.getDefault()).apply {
+                                minimumFractionDigits = 0
+                                maximumFractionDigits = 2
+                            }
+                            val displaySum = sumCents / 100.0
+                            binding.tvMonthlySummary.text = "Last month ($prevMonthName): $symbol ${formatter.format(displaySum)}"
                             binding.tvMonthlySummary.visibility = View.VISIBLE
                             prefs.edit().putString("last_month_checkpoint", currentMonthKey).apply()
                         }
                     }
-                    tempDb.close()
                 }
             }
         }
@@ -1065,6 +1126,11 @@
         override fun onDestroy() {
             // Always unregister listeners to prevent memory leaks
             appUpdateManager.unregisterListener(updateListener)
+
+            // FIX: Cancel pending UI callbacks to prevent Activity memory leaks and crashes
+            undoRunnable?.let { undoHandler.removeCallbacks(it) }
+            undoHandler.removeCallbacksAndMessages(null)
+
             super.onDestroy()
         }
         private fun showCustomUndo(message: String, onUndo: () -> Unit) {

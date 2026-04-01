@@ -30,12 +30,23 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
     private val viewModel: TransactionViewModel by activityViewModels()
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val dialog = super.onCreateDialog(savedInstanceState) as BottomSheetDialog
-        dialog.setOnShowListener {
-            val bottomSheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            bottomSheet?.layoutParams?.height = ViewGroup.LayoutParams.MATCH_PARENT
-        }
-        return dialog
+        return super.onCreateDialog(savedInstanceState) as BottomSheetDialog
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val dialog = dialog as BottomSheetDialog
+        val bottomSheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return
+        val behavior = BottomSheetBehavior.from(bottomSheet)
+
+        // FIX: Apply background and stable height rules BEFORE the animation starts
+        bottomSheet.setBackgroundResource(android.R.color.transparent)
+        bottomSheet.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
+
+        // FIX: Set a stable initial peak height (e.g., 68% of screen) to prevent the "snap"
+        val stablePeek = (resources.displayMetrics.heightPixels * 0.68).toInt()
+        behavior.peekHeight = stablePeek
+        behavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
 
     override fun onCreateView(
@@ -107,13 +118,9 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             val bottomSheet = (view.parent as View)
             val behavior = BottomSheetBehavior.from(bottomSheet)
 
-            // FIX: Clamp peekHeight to ensure room to "drag up"
-            val maxPeek = (resources.displayMetrics.heightPixels * 0.7).toInt()
-            behavior.peekHeight = summaryContainer.height.coerceAtMost(maxPeek)
+            // REMOVED: Redundant peekHeight/state setup here to stop the jumping issue
 
-            behavior.state = BottomSheetBehavior.STATE_COLLAPSED
             behavior.isHideable = true
-
             behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
                 override fun onStateChanged(bottomSheet: View, newState: Int) {
                     timelineMapView.isEnabled = newState == BottomSheetBehavior.STATE_EXPANDED
@@ -197,16 +204,19 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
             }
 
-            tvTodayNet.setTextColor(requireContext().getColor(if (stats.todayNet > 0) R.color.income_green else if (stats.todayNet < 0) R.color.expense_red else R.color.text_primary))
-            tvWeekNet.setTextColor(requireContext().getColor(if (stats.weekNet > 0) R.color.income_green else if (stats.weekNet < 0) R.color.expense_red else R.color.text_primary))
-            tvMonthNet.setTextColor(requireContext().getColor(if (stats.monthNet > 0) R.color.income_green else if (stats.monthNet < 0) R.color.expense_red else R.color.text_primary))
+            tvTodayNet.setTextColor(requireContext().getColor(if (stats.todayNet > 0L) R.color.income_green else if (stats.todayNet < 0L) R.color.expense_red else R.color.text_primary))
+            tvWeekNet.setTextColor(requireContext().getColor(if (stats.weekNet > 0L) R.color.income_green else if (stats.weekNet < 0L) R.color.expense_red else R.color.text_primary))
+            tvMonthNet.setTextColor(requireContext().getColor(if (stats.monthNet > 0L) R.color.income_green else if (stats.monthNet < 0L) R.color.expense_red else R.color.text_primary))
 
             animateText(tvPeriodNet, stats.periodNet) { v -> "Net: $symbol ${fmt(v)}" }
             animateText(tvPeriodCredits, stats.periodCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
             animateText(tvPeriodDebits, stats.periodDebits) { v -> "- $symbol ${fmt(abs(v))}" }
 
-            val maxProgress = if (stats.periodCredits > 0) stats.periodCredits else 1.0
-            val currentProgress = abs(stats.periodDebits)
+            // FIX: Scale down massive Long (cents) values to safely fit within Int.MAX_VALUE limits
+            val scaleFactor = 1000.0
+            val maxProgress = if (stats.periodCredits > 0) (stats.periodCredits / scaleFactor) else 1.0
+            val currentProgress = (abs(stats.periodDebits) / scaleFactor)
+
             progressCashFlow.max = maxProgress.toInt()
             progressCashFlow.setProgressCompat(currentProgress.toInt(), true)
 
@@ -232,24 +242,34 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             }
 
             // PUSH DATA TO MAP
-            timelineMapView.submitList(stats.timeline)
+            // FIX: Delay heavy map rendering slightly so the BottomSheet can slide up instantly without dropping frames
+            view?.postDelayed({
+                if (isAdded) timelineMapView.submitList(stats.timeline)
+            }, 200)
         }
     }
 
-    private fun fmt(d: Double): String {
-        return if (d % 1.0 == 0.0) d.toLong().toString() else String.format("%.2f", d)
+    // Hoisted reusable formatter (Add this as a class property near the top/bottom)
+    private val numberFormatter = java.text.NumberFormat.getInstance(java.util.Locale.getDefault()).apply {
+        minimumFractionDigits = 0
+        maximumFractionDigits = 2
     }
 
-    private fun animateText(tv: TextView, target: Double, format: (Double) -> String) {
-        val start = (tv.tag as? Double) ?: 0.0
-        if (start == target && tv.tag != null) return
-        tv.tag = target
+    private fun fmt(cents: Long): String {
+        val d = cents / 100.0
+        return numberFormatter.format(d)
+    }
 
-        val animator = android.animation.ValueAnimator.ofFloat(start.toFloat(), target.toFloat())
+    private fun animateText(tv: TextView, targetCents: Long, format: (Long) -> String) {
+        val startCents = (tv.tag as? Long) ?: 0L
+        if (startCents == targetCents && tv.tag != null) return
+        tv.tag = targetCents
+
+        val animator = android.animation.ValueAnimator.ofFloat(startCents.toFloat(), targetCents.toFloat())
         animator.duration = 800
         animator.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
         animator.addUpdateListener { anim ->
-            tv.text = format((anim.animatedValue as Float).toDouble())
+            tv.text = format((anim.animatedValue as Float).toLong())
         }
         animator.start()
     }

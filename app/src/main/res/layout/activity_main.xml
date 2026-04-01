@@ -62,7 +62,8 @@
             android:padding="24dp"
             android:clickable="true"
             android:focusable="true"
-            android:foreground="?attr/selectableItemBackground"
+            android:foreground="@null"
+            app:rippleColor="@android:color/transparent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toEndOf="@id/btnMenu"
             app:layout_constraintEnd_toStartOf="@id/btnSearch">

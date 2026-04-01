@@ -13,33 +13,26 @@
                 private const val ALGORITHM = "AES/CBC/PKCS5Padding"
                 private const val IV_SIZE = 16
 
-                // FIX 3: Robust Key Formatting
-                // Handles multi-byte characters safely while maintaining backward compatibility for ASCII keys.
-                private fun formatKey(key: String): SecretKeySpec {
-                    // Step 1: Mimic the old padding logic (Chars)
-                    // This ensures "123" becomes "123000..." (ASCII '0', not null byte)
-                    // maintaining access for existing users with short passwords.
+                // Legacy Key Formatting (Vulnerable to truncation) - Kept only for decrypting old data
+                private fun getLegacyKey(key: String): SecretKeySpec {
                     val paddedChars = key.padEnd(16, '0')
-
-                    // Step 2: Convert to bytes (UTF-8)
-                    // If 'key' contained special chars (e.g. "Möney"), this array might now be 17+ bytes.
                     val rawBytes = paddedChars.toByteArray(Charsets.UTF_8)
-
-                    // Step 3: Enforce strict 16-byte length
-                    // We truncate the byte array to exactly 16 bytes to satisfy AES-128 requirements.
-                    // We do not need to pad here because Step 1 ensured we have at least 16 chars (>= 16 bytes).
-                    val finalKeyBytes = if (rawBytes.size == 16) {
-                        rawBytes
-                    } else {
-                        rawBytes.copyOf(16)
-                    }
-
+                    val finalKeyBytes = if (rawBytes.size == 16) rawBytes else rawBytes.copyOf(16)
                     return SecretKeySpec(finalKeyBytes, "AES")
+                }
+
+                // Secure Key Derivation (Fixes UTF-8 Slicing & Weak Keys)
+                // Uses SHA-256 to hash the password, guaranteeing a safe 32-byte array (AES-256)
+                // without ever slicing multi-byte UTF-8 characters.
+                private fun getSecureKey(key: String): SecretKeySpec {
+                    val md = java.security.MessageDigest.getInstance("SHA-256")
+                    val keyBytes = md.digest(key.toByteArray(Charsets.UTF_8))
+                    return SecretKeySpec(keyBytes, "AES")
                 }
 
                 fun encrypt(text: String, secretKey: String): String {
                     try {
-                        val keySpec = formatKey(secretKey)
+                        val keySpec = getSecureKey(secretKey)
                         val cipher = Cipher.getInstance(ALGORITHM)
 
                         // SECURITY UPGRADE: Generate a Random IV for every encryption
@@ -64,44 +57,44 @@
 
                 fun decrypt(encryptedText: String, secretKey: String): String {
                     try {
-                        val keySpec = formatKey(secretKey)
                         val decoded = Base64.decode(encryptedText, Base64.NO_WRAP)
 
-                        // COMPATIBILITY LOGIC:
-                        // 1. Try to decrypt assuming the new format (Random IV at the front)
+                        // Try extracting IV and decrypting
                         if (decoded.size > IV_SIZE) {
+                            val ivBytes = ByteArray(IV_SIZE)
+                            val bodySize = decoded.size - IV_SIZE
+                            val bodyBytes = ByteArray(bodySize)
+
+                            System.arraycopy(decoded, 0, ivBytes, 0, IV_SIZE)
+                            System.arraycopy(decoded, IV_SIZE, bodyBytes, 0, bodySize)
+
+                            val iv = IvParameterSpec(ivBytes)
+                            val cipher = Cipher.getInstance(ALGORITHM)
+
+                            // Attempt 1: New Secure SHA-256 Key (AES-256)
                             try {
-                                val ivBytes = ByteArray(IV_SIZE)
-                                val bodySize = decoded.size - IV_SIZE
-                                val bodyBytes = ByteArray(bodySize)
-
-                                System.arraycopy(decoded, 0, ivBytes, 0, IV_SIZE)
-                                System.arraycopy(decoded, IV_SIZE, bodyBytes, 0, bodySize)
-
-                                val cipher = Cipher.getInstance(ALGORITHM)
-                                val iv = IvParameterSpec(ivBytes)
-                                cipher.init(Cipher.DECRYPT_MODE, keySpec, iv)
-
+                                cipher.init(Cipher.DECRYPT_MODE, getSecureKey(secretKey), iv)
                                 val decryptedBytes = cipher.doFinal(bodyBytes)
                                 val result = String(decryptedBytes, Charsets.UTF_8)
-
-                                // FIX: Validate result is actual text, not garbage
-                                // This catches cases where the key was wrong but padding coincidentally matched.
-                                if (looksLikeText(result)) {
-                                    return result
-                                } else {
-                                    // If it looks like garbage, it might be Legacy format (which had no IV).
-                                    // Fall through to catch block to try legacy.
-                                    throw Exception("Decrypted result is binary garbage")
-                                }
+                                if (looksLikeText(result)) return result
                             } catch (e: Exception) {
-                                // If padding fails, it might be old data (Zero IV). Fallback.
-                                return decryptLegacy(decoded, keySpec)
+                                // Fall through to Attempt 2
                             }
-                        } else {
-                            // Too short to have an IV, likely legacy data
-                            return decryptLegacy(decoded, keySpec)
+
+                            // Attempt 2: Legacy Truncated Key with IV (AES-128)
+                            try {
+                                cipher.init(Cipher.DECRYPT_MODE, getLegacyKey(secretKey), iv)
+                                val decryptedBytes = cipher.doFinal(bodyBytes)
+                                val result = String(decryptedBytes, Charsets.UTF_8)
+                                if (looksLikeText(result)) return result
+                            } catch (e: Exception) {
+                                // Fall through to Attempt 3
+                            }
                         }
+
+                        // Attempt 3: Legacy Truncated Key with Zero IV (Oldest Format)
+                        return decryptLegacy(decoded, getLegacyKey(secretKey))
+
                     } catch (e: Exception) {
                         e.printStackTrace()
                         return ""

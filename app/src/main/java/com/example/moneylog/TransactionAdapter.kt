@@ -28,6 +28,11 @@ class TransactionAdapter(
     private val timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
     private val dateFullFormatter = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())
 
+    // FIX: Hoist Calendar and Date allocations. onBind is single-threaded (Main Thread), so this is 100% safe.
+    private val headerCal = Calendar.getInstance()
+    private val headerNow = Calendar.getInstance()
+    private val headerDate = Date()
+
     inner class TransactionViewHolder(val binding: ItemTransactionBinding) :
         RecyclerView.ViewHolder(binding.root)
 
@@ -47,11 +52,12 @@ class TransactionAdapter(
 
         // 2. Amount Styling
         val isIncome = item.amount >= 0
-        val rawAmt = if (item.amount % 1.0 == 0.0) {
-            abs(item.amount).toLong().toString()
-        } else {
-            abs(item.amount).toString()
+        val amountDouble = abs(item.amount) / 100.0
+        val formatter = java.text.NumberFormat.getInstance(Locale.getDefault()).apply {
+            minimumFractionDigits = 0
+            maximumFractionDigits = 2
         }
+        val rawAmt = formatter.format(amountDouble)
 
         // Sign Logic
         val displayAmount = if (showSigns) {
@@ -117,23 +123,37 @@ class TransactionAdapter(
     }
 
     private fun getDateHeader(timestamp: Long): String {
-        val date = Date(timestamp)
-        val cal = Calendar.getInstance()
-        cal.time = date
-        val now = Calendar.getInstance()
+        headerDate.time = timestamp
+        headerCal.time = headerDate
+        headerNow.timeInMillis = System.currentTimeMillis() // Efficiently update 'now'
 
-        if (cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)) {
-            if (cal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)) return "Today"
-            now.add(Calendar.DAY_OF_YEAR, -1)
-            if (cal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)) return "Yesterday"
+        if (headerCal.get(Calendar.YEAR) == headerNow.get(Calendar.YEAR)) {
+            if (headerCal.get(Calendar.DAY_OF_YEAR) == headerNow.get(Calendar.DAY_OF_YEAR)) return "Today"
+            headerNow.add(Calendar.DAY_OF_YEAR, -1)
+            if (headerCal.get(Calendar.DAY_OF_YEAR) == headerNow.get(Calendar.DAY_OF_YEAR)) return "Yesterday"
         }
-        return dateFullFormatter.format(date)
+        return dateFullFormatter.format(headerDate)
     }
 
     override fun getItemCount() = transactions.size
 
     fun updateData(newTransactions: List<Transaction>) {
+        val diffCallback = object : androidx.recyclerview.widget.DiffUtil.Callback() {
+            override fun getOldListSize() = transactions.size
+            override fun getNewListSize() = newTransactions.size
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                // Check if it's the exact same database row
+                return transactions[oldItemPosition].id == newTransactions[newItemPosition].id
+            }
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                // Check if any fields (amount, description, etc.) have been edited
+                return transactions[oldItemPosition] == newTransactions[newItemPosition]
+            }
+        }
+        val diffResult = androidx.recyclerview.widget.DiffUtil.calculateDiff(diffCallback)
         transactions = newTransactions
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 }

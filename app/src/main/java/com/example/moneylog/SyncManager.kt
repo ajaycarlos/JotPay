@@ -117,7 +117,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     fun unlinkDevice() {
         val newVault = UUID.randomUUID().toString()
-        val newKey = UUID.randomUUID().toString().substring(0, 16)
+        // FIX: Use SecureRandom to generate a true 128-bit key, encoded safely as Base64
+        val randomBytes = ByteArray(16)
+        java.security.SecureRandom().nextBytes(randomBytes)
+        val newKey = android.util.Base64.encodeToString(randomBytes, android.util.Base64.NO_WRAP)
 
         prefs.edit()
             .putString("vault_id", newVault)

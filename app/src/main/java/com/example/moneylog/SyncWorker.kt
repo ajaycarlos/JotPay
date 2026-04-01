@@ -27,6 +27,12 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val syncManager = SyncManager(applicationContext, db)
 
         try {
+            // FIX: Ensure Firebase Anonymous Auth is complete BEFORE accessing DB (Prevents Race Condition)
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            if (auth.currentUser == null) {
+                auth.signInAnonymously().await()
+            }
+
             val ref = FirebaseDatabase.getInstance().getReference("vaults").child(vaultId)
 
             // ---------------------------------------------------------
@@ -96,18 +102,19 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                             try {
                                 val serverObj = JSONObject(serverJsonStr)
                                 val sText = serverObj.optString("o")
-                                val sAmt = serverObj.optDouble("a")
+
+                                // FIX: Use Long for financial precision to match Transaction entity
+                                val sAmt = serverObj.optLong("a")
                                 val sDesc = serverObj.optString("d")
 
-                                // FIX: Safe Defaults for Cross-Version Compatibility
+                                // FIX: Safe Defaults for Cross-Version Compatibility using Long
                                 val sNature = serverObj.optString("n", "NORMAL")
-                                val sObligation = serverObj.optDouble("oa", 0.0)
+                                val sObligation = serverObj.optLong("oa", 0L)
 
-                                // Floating point comparison tolerance
-                                val isAmtMatch = abs(sAmt - t.amount) < 0.001
-                                val isObliMatch = abs(sObligation - t.obligationAmount) < 0.001
+                                // Strict Comparison: Use direct equality for Long cents
+                                val isAmtMatch = sAmt == t.amount
+                                val isObliMatch = sObligation == t.obligationAmount
 
-                                // Strict Comparison: If Nature or Obligation differs, we MUST push
                                 val isExactMatch = (sText == t.originalText) &&
                                         isAmtMatch &&
                                         (sDesc == t.description) &&
@@ -139,8 +146,6 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                         pushedKeys.add(stableId)
 
                         // FIX: Remove pending flag ONLY if token matches
-
-                        // FIX: Remove pending flag ONLY if token matches
                         if (isPendingEdit && pendingToken != null) {
                             syncManager.removePendingEdit(t.timestamp, pendingToken)
                         }
@@ -162,22 +167,22 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     try {
                         val jsonObject = JSONObject(jsonStr)
                         val originalText = jsonObject.optString("o")
-                        val amount = jsonObject.optDouble("a")
+
+                        // FIX: Use Long for financial precision to match Transaction entity
+                        val amount = jsonObject.optLong("a")
                         val desc = jsonObject.optString("d")
                         val timestamp = jsonObject.optLong("t")
 
-                        // FIX: EXTRACT VARIABLES SO THEY ARE NOT UNRESOLVED
                         val nature = jsonObject.optString("n", "NORMAL")
-                        val obligationAmount = jsonObject.optDouble("oa", 0.0)
+                        val obligationAmount = jsonObject.optLong("oa", 0L)
 
                         // FIX: GET FRESH LISTS TO PREVENT OVERWRITING NEW LOCAL EDITS
-                        // Check LIVE state, not the old snapshot
                         val freshPendingDeletes = syncManager.getPendingDeletes()
                         if (freshPendingDeletes.contains(timestamp.toString())) continue
 
-                        // FIX: Check LIVE pending edit state
                         if (syncManager.hasPendingEdit(timestamp)) continue
 
+                        // FIX: Initialize 'existing' to resolve compilation error
                         val existing = db.transactionDao().getByTimestamp(timestamp)
 
                         if (existing == null) {
@@ -192,9 +197,9 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                             ))
                             changesCount++
                         } else {
-                            // Update Existing
-                            val isAmtDiff = abs(existing.amount - amount) > 0.001
-                            val isObliDiff = abs(existing.obligationAmount - obligationAmount) > 0.001
+                            // Update Existing using precise Long comparison
+                            val isAmtDiff = existing.amount != amount
+                            val isObliDiff = existing.obligationAmount != obligationAmount
 
                             // If ANYTHING changed (including nature), update local DB
                             if (existing.originalText != originalText ||

@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
         targetSdk = 35
-        versionCode = 144
-        versionName = "2.8.3"
+        versionCode = 156
+        versionName = "2.9.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -67,6 +67,8 @@ dependencies {
     // The BoM (Bill of Materials) manages versions automatically
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
+    // FIX: Add Firebase Auth dependency
+    implementation("com.google.firebase:firebase-auth-ktx")
 
     // --- QR CODE ---
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
@@ -83,4 +85,5 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.6.2")
 
     implementation("com.google.android.material:material:1.13.0")
+    implementation("com.google.firebase:firebase-auth-ktx")
 }

@@ -7,39 +7,38 @@ import androidx.room.PrimaryKey
 data class Transaction(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val originalText: String,
-    val amount: Double,       // CASH FLOW (Affects Main Balance)
+    val amount: Long,       // CASH FLOW in cents/smallest unit (Affects Main Balance)
     val description: String,
     val timestamp: Long,
 
     // NEW FIELDS
     val nature: String = "NORMAL", // "NORMAL", "ASSET", "LIABILITY"
-    val obligationAmount: Double = 0.0 // Tracks what is owed/due. DOES NOT affect Main Balance.
+    val obligationAmount: Long = 0L // Tracks what is owed/due in cents/smallest unit.
 )
 
 data class TimelineItem(
     val timestamp: Long,
     val description: String,
-    val amount: Double,
-    val runningBalance: Double
+    val amount: Long,
+    val runningBalance: Long
 )
 
 data class PerformanceStats(
-    val periodNet: Double = 0.0,
-    val periodCredits: Double = 0.0,
-    val periodDebits: Double = 0.0,
+    val periodNet: Long = 0L,
+    val periodCredits: Long = 0L,
+    val periodDebits: Long = 0L,
 
-    val todayNet: Double = 0.0,
-    val todayCredits: Double = 0.0,
-    val todayDebits: Double = 0.0,
+    val todayNet: Long = 0L,
+    val todayCredits: Long = 0L,
+    val todayDebits: Long = 0L,
 
-    val weekNet: Double = 0.0,
-    val weekCredits: Double = 0.0,
-    val weekDebits: Double = 0.0,
+    val weekNet: Long = 0L,
+    val weekCredits: Long = 0L,
+    val weekDebits: Long = 0L,
 
-    // RESTORE THESE MISSING VARIABLES
-    val monthNet: Double = 0.0,
-    val monthCredits: Double = 0.0,
-    val monthDebits: Double = 0.0,
+    val monthNet: Long = 0L,
+    val monthCredits: Long = 0L,
+    val monthDebits: Long = 0L,
 
     val availableTimestamps: List<Long> = emptyList(),
     val timeline: List<TimelineItem> = emptyList()

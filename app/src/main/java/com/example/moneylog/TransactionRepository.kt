@@ -14,6 +14,12 @@ class TransactionRepository(private val db: AppDatabase, private val syncManager
         db.transactionDao().insert(transaction)
     }
 
+    suspend fun insertAll(transactions: List<Transaction>) {
+        // Queue all items for cloud sync to maintain existing backup behavior
+        transactions.forEach { syncManager.queueEdit(it.timestamp) }
+        db.transactionDao().insertAll(transactions)
+    }
+
     suspend fun update(transaction: Transaction) {
         // FIX: Whitelist this item so SyncWorker protects it from overwrite
         syncManager.queueEdit(transaction.timestamp)
@@ -26,8 +32,8 @@ class TransactionRepository(private val db: AppDatabase, private val syncManager
         syncManager.scheduleSync()
     }
 
-    // FIX: Updated signature to match DAO's exact check
-    suspend fun checkDuplicate(amount: Double, desc: String, timestamp: Long): Int {
+    // FIX: Updated signature to match DAO's exact check using precise Long (cents)
+    suspend fun checkDuplicate(amount: Long, desc: String, timestamp: Long): Int {
         return db.transactionDao().checkDuplicate(amount, desc, timestamp)
     }
 
