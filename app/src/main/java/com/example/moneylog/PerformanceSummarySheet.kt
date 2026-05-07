@@ -23,6 +23,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import android.widget.SeekBar
+import com.example.moneylog.R
 
 
 class PerformanceSummarySheet : BottomSheetDialogFragment() {
@@ -37,16 +38,10 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         super.onStart()
         val dialog = dialog as BottomSheetDialog
         val bottomSheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return
-        val behavior = BottomSheetBehavior.from(bottomSheet)
 
-        // FIX: Apply background and stable height rules BEFORE the animation starts
         bottomSheet.setBackgroundResource(android.R.color.transparent)
+        // Keep the sheet MATCH_PARENT so the map can expand to the top later
         bottomSheet.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
-
-        // FIX: Set a stable initial peak height (e.g., 68% of screen) to prevent the "snap"
-        val stablePeek = (resources.displayMetrics.heightPixels * 0.68).toInt()
-        behavior.peekHeight = stablePeek
-        behavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
 
     override fun onCreateView(
@@ -67,6 +62,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         // FIX: Cast as NestedScrollView to match XML and prevent crashes
         val summaryContainer = view.findViewById<androidx.core.widget.NestedScrollView>(R.id.summaryContainer)
         val tvDragHint = view.findViewById<TextView>(R.id.tvDragHint)
+        val tvEmptyTimeline = view.findViewById<TextView>(R.id.tvEmptyTimeline) // <-- ADD THIS LINE
 
         // BIND MAP COMPONENTS
         val timelineMapView = view.findViewById<TimelineMapView>(R.id.timelineMapView)
@@ -90,17 +86,18 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         val tvPeriodDebits = view.findViewById<TextView>(R.id.tvPeriodDebits)
         val progressCashFlow = view.findViewById<LinearProgressIndicator>(R.id.progressCashFlow)
 
-        val tvTodayIncome = view.findViewById<TextView>(R.id.tvTodayIncome)
-        val tvTodayExpense = view.findViewById<TextView>(R.id.tvTodayExpense)
-        val tvTodayNet = view.findViewById<TextView>(R.id.tvTodayNet)
+        // BIND AND ENLARGE TEXT SIZES FOR BOXES
+        val tvTodayIncome = view.findViewById<TextView>(R.id.tvTodayIncome).apply { textSize = 15f }
+        val tvTodayExpense = view.findViewById<TextView>(R.id.tvTodayExpense).apply { textSize = 15f }
+        val tvTodayNet = view.findViewById<TextView>(R.id.tvTodayNet).apply { textSize = 18f }
 
-        val tvWeekIncome = view.findViewById<TextView>(R.id.tvWeekIncome)
-        val tvWeekExpense = view.findViewById<TextView>(R.id.tvWeekExpense)
-        val tvWeekNet = view.findViewById<TextView>(R.id.tvWeekNet)
+        val tvWeekIncome = view.findViewById<TextView>(R.id.tvWeekIncome).apply { textSize = 15f }
+        val tvWeekExpense = view.findViewById<TextView>(R.id.tvWeekExpense).apply { textSize = 15f }
+        val tvWeekNet = view.findViewById<TextView>(R.id.tvWeekNet).apply { textSize = 18f }
 
-        val tvMonthIncome = view.findViewById<TextView>(R.id.tvMonthIncome)
-        val tvMonthExpense = view.findViewById<TextView>(R.id.tvMonthExpense)
-        val tvMonthNet = view.findViewById<TextView>(R.id.tvMonthNet)
+        val tvMonthIncome = view.findViewById<TextView>(R.id.tvMonthIncome).apply { textSize = 15f }
+        val tvMonthExpense = view.findViewById<TextView>(R.id.tvMonthExpense).apply { textSize = 15f }
+        val tvMonthNet = view.findViewById<TextView>(R.id.tvMonthNet).apply { textSize = 18f }
 
         // Initialize Map Controls
         mapControls.alpha = 0f
@@ -118,7 +115,10 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             val bottomSheet = (view.parent as View)
             val behavior = BottomSheetBehavior.from(bottomSheet)
 
-            // REMOVED: Redundant peekHeight/state setup here to stop the jumping issue
+            // FIX: Dynamically measure the exact height of your summary content
+            // This guarantees the sheet stops exactly under the "Drag up for Timeline" text on ANY device
+            behavior.peekHeight = summaryContainer.height
+            behavior.state = BottomSheetBehavior.STATE_COLLAPSED
 
             behavior.isHideable = true
             behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
@@ -212,13 +212,24 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             animateText(tvPeriodCredits, stats.periodCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
             animateText(tvPeriodDebits, stats.periodDebits) { v -> "- $symbol ${fmt(abs(v))}" }
 
-            // FIX: Scale down massive Long (cents) values to safely fit within Int.MAX_VALUE limits
-            val scaleFactor = 1000.0
-            val maxProgress = if (stats.periodCredits > 0) (stats.periodCredits / scaleFactor) else 1.0
-            val currentProgress = (abs(stats.periodDebits) / scaleFactor)
+            // FIX: Accurate Cash Flow Progress Bar using Percentages
+            val totalVolume = stats.periodCredits + abs(stats.periodDebits)
+            if (totalVolume == 0L) {
+                // If 0, make it a neutral empty bar so it doesn't look like a huge expense
+                progressCashFlow.trackColor = requireContext().getColor(R.color.text_tertiary)
+                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.text_tertiary))
+                progressCashFlow.max = 100
+                progressCashFlow.setProgressCompat(0, true)
+            } else {
+                // Reset colors to normal (Green for Income, Red for Expense track)
+                progressCashFlow.trackColor = requireContext().getColor(R.color.expense_red)
+                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.income_green))
 
-            progressCashFlow.max = maxProgress.toInt()
-            progressCashFlow.setProgressCompat(currentProgress.toInt(), true)
+                // Use percentages to completely avoid Int.MAX_VALUE crashes
+                progressCashFlow.max = 100
+                val incomePercentage = ((stats.periodCredits.toDouble() / totalVolume.toDouble()) * 100).toInt()
+                progressCashFlow.setProgressCompat(incomePercentage, true)
+            }
 
             animateText(tvTodayIncome, stats.todayCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
             animateText(tvTodayExpense, stats.todayDebits) { v -> "- $symbol ${fmt(abs(v))}" }
@@ -239,6 +250,32 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             animateText(tvMonthNet, stats.monthNet) { v ->
                 val sign = if (v > 0) "+ " else if (v < 0) "- " else ""
                 "$sign$symbol ${fmt(abs(v))}"
+            }
+
+            // --- EMPTY STATE LOGIC ---
+            if (stats.timeline.isEmpty()) {
+                tvEmptyTimeline.visibility = View.VISIBLE
+                timelineMapView.visibility = View.INVISIBLE
+                mapControls.visibility = View.GONE
+                tvDragHint.visibility = View.GONE
+            } else {
+                tvEmptyTimeline.visibility = View.GONE
+                timelineMapView.visibility = View.VISIBLE
+                mapControls.visibility = View.VISIBLE
+                tvDragHint.visibility = View.VISIBLE
+            }
+
+            // --- EMPTY STATE LOGIC ---
+            if (stats.timeline.isEmpty()) {
+                tvEmptyTimeline.visibility = View.VISIBLE
+                timelineMapView.visibility = View.INVISIBLE
+                mapControls.visibility = View.GONE
+                tvDragHint.visibility = View.GONE
+            } else {
+                tvEmptyTimeline.visibility = View.GONE
+                timelineMapView.visibility = View.VISIBLE
+                mapControls.visibility = View.VISIBLE
+                tvDragHint.visibility = View.VISIBLE
             }
 
             // PUSH DATA TO MAP

@@ -42,6 +42,8 @@
             import android.os.Handler
             import android.os.Looper
             import android.widget.TextView
+    import com.getkeepsafe.taptargetview.TapTarget
+    import com.getkeepsafe.taptargetview.TapTargetSequence
     import com.google.android.play.core.appupdate.AppUpdateManager
     import com.google.android.play.core.appupdate.AppUpdateManagerFactory
     import com.google.android.play.core.install.InstallStateUpdatedListener
@@ -150,6 +152,7 @@
                 viewModel.refreshData()
                 runSync()
                 checkForUpdates()
+                startGuidedTutorial()
             }
 
             // Check for downloaded background updates
@@ -656,30 +659,21 @@
         }
 
         private fun updateSignToggleVisibility() {
-            val text = binding.etInput.text.toString()
-            val isNumericMode = (text.startsWith("+") || text.startsWith("-") || text.firstOrNull()?.isDigit() == true) && !text.contains(" ")
-            val shouldShowBar = text.isEmpty() || isNumericMode
+            // Logic: Show the bar whenever the input has focus, regardless of content
+            val shouldShowBar = binding.etInput.isFocused
 
             if (shouldShowBar) {
                 if (binding.layoutSignToggles.visibility != View.VISIBLE) {
                     binding.layoutSignToggles.alpha = 0f
                     binding.layoutSignToggles.visibility = View.VISIBLE
-                    binding.layoutSignToggles.animate().alpha(1f).setDuration(150).withEndAction(null).start()
-                } else {
-                    binding.layoutSignToggles.alpha = 1f
+                    binding.layoutSignToggles.animate().alpha(1f).setDuration(150).start()
                 }
-
-                if (text.isEmpty()) {
-                    binding.btnPlus.visibility = View.VISIBLE
-                    binding.btnMinus.visibility = View.VISIBLE
-                    binding.btnSpace.visibility = View.GONE
-                } else {
-                    binding.btnPlus.visibility = View.VISIBLE
-                    binding.btnMinus.visibility = View.VISIBLE
-                    binding.btnSpace.visibility = View.VISIBLE
-                }
+                // Ensure all three buttons are always visible when the bar is shown
+                binding.btnPlus.visibility = View.VISIBLE
+                binding.btnMinus.visibility = View.VISIBLE
+                binding.btnSpace.visibility = View.VISIBLE
             } else {
-                if (binding.layoutSignToggles.visibility == View.VISIBLE && binding.layoutSignToggles.alpha == 1f) {
+                if (binding.layoutSignToggles.visibility == View.VISIBLE) {
                     binding.layoutSignToggles.animate().alpha(0f).setDuration(150).withEndAction {
                         binding.layoutSignToggles.visibility = View.GONE
                     }.start()
@@ -988,7 +982,15 @@
                     isOnboardingShowing = false
                     CurrencyHelper.setCurrency(this, currencies[which])
                     viewModel.refreshData()
-                    if(isFirstLaunch) checkMonthlyCheckpoint()
+                    if(isFirstLaunch) {
+                        checkMonthlyCheckpoint()
+                        // Bug Fix: Add a 500ms delay to let the dialog fully dismiss
+                        // This prevents TapTargetView from failing to find views behind the dialog.
+                        binding.root.postDelayed({
+                            updateSignToggleVisibility() // Ensure the +/- buttons are visible
+                            startGuidedTutorial()
+                        }, 500)
+                    }
                 }.show()
         }
 
@@ -1058,13 +1060,6 @@
                 setPadding(32, 24, 32, 24)
                 elevation = 24f
             }
-
-            val text = TextView(context).apply {
-                text = "Tip: Long-press Send for Assets & Liabilities"
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-            }
-            container.addView(text)
 
             val popup = android.widget.PopupWindow(
                 container,
@@ -1166,6 +1161,84 @@
                 .withEndAction {
                     binding.layoutUndoAction.visibility = View.GONE
                 }.start()
+        }
+        private fun startGuidedTutorial() {
+            val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("is_first_launch", true)) return
+
+            // FIX 1: Force the button bar and all buttons to be visible so the tutorial doesn't crash
+            binding.layoutSignToggles.visibility = View.VISIBLE
+            binding.layoutSignToggles.alpha = 1f
+            binding.btnPlus.visibility = View.VISIBLE
+            binding.btnMinus.visibility = View.VISIBLE
+            binding.btnSpace.visibility = View.VISIBLE
+
+            TapTargetSequence(this)
+                .targets(
+                    TapTarget.forView(binding.btnPlus, "Add Income", "Tap '+' to log money coming in.")
+                        .outerCircleColor(R.color.income_green)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                        .cancelable(false),
+
+                    TapTarget.forView(binding.btnMinus, "Log Expense", "Tap '-' to log money going out.")
+                        .outerCircleColor(R.color.expense_red)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true),
+
+                    TapTarget.forView(binding.btnSpace, "Add a Note", "Tap 'Space' to start typing a description for your transaction.")
+                        .outerCircleColor(R.color.text_secondary)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true),
+
+                    TapTarget.forView(binding.btnSend, "Quick Send", "Type the amount and note, then tap here to save a normal transaction.")
+                        .outerCircleColor(R.color.accent_calm)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.btnSend, "Advanced Logging", "Press and HOLD this button to log special entries like Assets or Liabilities.")
+                        .outerCircleColor(R.color.accent_calm)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.btnSend, "What is an Asset?", "Use 'Asset' when you lend money to a friend. \n\nTip: When your friend pays you back, log another Asset to balance the record!")
+                        .outerCircleColor(R.color.income_green)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.btnSend, "What is a Liability?", "Use 'Liability' when you borrow money from someone. \n\nTip: When you return the money, log another Liability to clear your debt.")
+                        .outerCircleColor(R.color.expense_red)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                        .tintTarget(false),
+
+                    TapTarget.forView(binding.cardBalance, "Financial Insights", "Tap the balance card to view your cash flow map and performance stats.")
+                        .outerCircleColor(R.color.accent_calm)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true),
+
+                    TapTarget.forView(binding.btnMenu, "Settings & Backup", "Access your profile, change currency, or link devices from the menu.")
+                        .outerCircleColor(R.color.text_secondary)
+                        .targetCircleColor(R.color.white)
+                        .transparentTarget(true)
+                )
+                .listener(object : TapTargetSequence.Listener {
+                    override fun onSequenceFinish() {
+                        // Only mark as finished when they complete it
+                        prefs.edit().putBoolean("is_first_launch", false).apply()
+                        // Restore normal visibility logic based on whether they are actually typing
+                        updateSignToggleVisibility()
+                    }
+                    override fun onSequenceStep(lastTarget: TapTarget, targetClicked: Boolean) {}
+                    override fun onSequenceCanceled(lastTarget: TapTarget) {
+                        // Restore normal visibility if they cancel
+                        updateSignToggleVisibility()
+                    }
+                })
+                .start()
         }
 
     }

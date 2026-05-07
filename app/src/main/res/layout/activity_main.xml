@@ -225,7 +225,7 @@
                 android:scaleType="centerInside"
                 android:background="@drawable/bg_message_card"
                 app:tint="@color/text_secondary"
-                android:visibility="gone"/>
+                android:visibility="visible"/>
         </LinearLayout>
         <LinearLayout
             android:id="@+id/layoutUndoAction"

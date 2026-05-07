@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
         targetSdk = 35
-        versionCode = 156
-        versionName = "2.9.5"
+        versionCode = 197
+        versionName = "3.3.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -56,6 +56,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("com.google.android.play:app-update:2.1.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
+    implementation("com.getkeepsafe.taptargetview:taptargetview:1.13.3")
     implementation("com.google.android.material:material:1.11.0")
 
     // --- ROOM DATABASE (KSP) ---
@@ -86,4 +87,10 @@ dependencies {
 
     implementation("com.google.android.material:material:1.13.0")
     implementation("com.google.firebase:firebase-auth-ktx")
+
+    // --- GUIDED TUTORIAL ---
+    implementation("com.getkeepsafe.taptargetview:taptargetview:1.13.3")
+
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.google.android.material:material:1.11.0")
 }
