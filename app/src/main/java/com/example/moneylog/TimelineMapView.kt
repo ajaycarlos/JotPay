@@ -45,9 +45,16 @@ class TimelineMapView @JvmOverloads constructor(
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
+            val oldScale = scaleFactor
             scaleFactor *= detector.scaleFactor
-            scaleFactor = scaleFactor.coerceIn(0.2f, 3.0f)
-            transformMatrix.postScale(detector.scaleFactor, detector.scaleFactor, detector.focusX, detector.focusY)
+
+            // FIX: Enforce a safer minimum zoom of 0.5f to prevent line congestion
+            scaleFactor = scaleFactor.coerceIn(0.5f, 3.0f)
+
+            // FIX: Only scale the matrix by the actual clamped amount, preventing infinite shrinking
+            val actualScaleChange = scaleFactor / oldScale
+
+            transformMatrix.postScale(actualScaleChange, actualScaleChange, detector.focusX, detector.focusY)
             invalidate()
             return true
         }
@@ -122,8 +129,10 @@ class TimelineMapView @JvmOverloads constructor(
     }
 
     fun setZoom(level: Float) {
-        val scaleChange = level / scaleFactor
-        scaleFactor = level
+        // FIX: Bulletproof the slider input to match our safe limits
+        val safeLevel = level.coerceIn(0.5f, 3.0f)
+        val scaleChange = safeLevel / scaleFactor
+        scaleFactor = safeLevel
         transformMatrix.postScale(scaleChange, scaleChange, width / 2f, height / 2f)
         invalidate()
     }

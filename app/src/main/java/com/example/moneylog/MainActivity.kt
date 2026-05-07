@@ -659,26 +659,19 @@
         }
 
         private fun updateSignToggleVisibility() {
-            // Logic: Show the bar whenever the input has focus, regardless of content
-            val shouldShowBar = binding.etInput.isFocused
+            // FIX: Always keep the helper buttons persistent above the input bar!
 
-            if (shouldShowBar) {
-                if (binding.layoutSignToggles.visibility != View.VISIBLE) {
-                    binding.layoutSignToggles.alpha = 0f
-                    binding.layoutSignToggles.visibility = View.VISIBLE
-                    binding.layoutSignToggles.animate().alpha(1f).setDuration(150).start()
-                }
-                // Ensure all three buttons are always visible when the bar is shown
-                binding.btnPlus.visibility = View.VISIBLE
-                binding.btnMinus.visibility = View.VISIBLE
-                binding.btnSpace.visibility = View.VISIBLE
-            } else {
-                if (binding.layoutSignToggles.visibility == View.VISIBLE) {
-                    binding.layoutSignToggles.animate().alpha(0f).setDuration(150).withEndAction {
-                        binding.layoutSignToggles.visibility = View.GONE
-                    }.start()
-                }
+            if (binding.layoutSignToggles.visibility != View.VISIBLE) {
+                binding.layoutSignToggles.visibility = View.VISIBLE
+                binding.layoutSignToggles.alpha = 1f
             }
+
+            // Ensure all three buttons are always visible
+            binding.btnPlus.visibility = View.VISIBLE
+            binding.btnMinus.visibility = View.VISIBLE
+            binding.btnSpace.visibility = View.VISIBLE
+
+            // Removed the "else" block so they never animate out and disappear!
         }
 
         private fun setupKeyboardSwitching() {
@@ -1220,7 +1213,7 @@
                         .targetCircleColor(R.color.white)
                         .transparentTarget(true),
 
-                    TapTarget.forView(binding.btnMenu, "Settings & Backup", "Access your profile, change currency, or link devices from the menu.")
+                    TapTarget.forView(binding.btnMenu, "Settings & Backup", "Change currency, Export or Import Backup or link devices from the menu.")
                         .outerCircleColor(R.color.text_secondary)
                         .targetCircleColor(R.color.white)
                         .transparentTarget(true)

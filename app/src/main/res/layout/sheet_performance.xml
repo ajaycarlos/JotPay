@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_dialog_rounded">
+    android:background="#121212">
 
     <RelativeLayout
         android:layout_width="match_parent"
@@ -71,9 +71,9 @@
                 android:layout_width="140dp"
                 android:layout_height="wrap_content"
 
-                android:valueFrom="0.2"
+                android:valueFrom="0.5"
                 android:valueTo="3.0"
-                android:value="0.7"
+                android:value="0.8"
 
                 app:labelBehavior="gone"
                 app:thumbRadius="5dp"
@@ -105,8 +105,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fillViewport="true"
-        android:background="@drawable/bg_dialog_rounded"
-        android:backgroundTint="#121212">
+        android:background="#121212">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -226,5 +225,11 @@
                 android:layout_marginTop="8dp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
+
+    <View
+        android:id="@+id/bottomCurtain"
+        android:layout_width="match_parent"
+        android:layout_height="800dp"
+        android:background="#121212" />
 
 </FrameLayout>

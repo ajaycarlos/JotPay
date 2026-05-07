@@ -123,37 +123,26 @@ class TransactionAdapter(
     }
 
     private fun getDateHeader(timestamp: Long): String {
-        headerDate.time = timestamp
-        headerCal.time = headerDate
-        headerNow.timeInMillis = System.currentTimeMillis() // Efficiently update 'now'
+        val date = Date(timestamp)
+        val cal = Calendar.getInstance().apply { time = date }
+        val now = Calendar.getInstance()
 
-        if (headerCal.get(Calendar.YEAR) == headerNow.get(Calendar.YEAR)) {
-            if (headerCal.get(Calendar.DAY_OF_YEAR) == headerNow.get(Calendar.DAY_OF_YEAR)) return "Today"
-            headerNow.add(Calendar.DAY_OF_YEAR, -1)
-            if (headerCal.get(Calendar.DAY_OF_YEAR) == headerNow.get(Calendar.DAY_OF_YEAR)) return "Yesterday"
+        if (cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)) {
+            val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
+            val nowDayOfYear = now.get(Calendar.DAY_OF_YEAR)
+
+            if (dayOfYear == nowDayOfYear) return "Today"
+            if (dayOfYear == nowDayOfYear - 1) return "Yesterday"
         }
-        return dateFullFormatter.format(headerDate)
+        return dateFullFormatter.format(date)
     }
 
     override fun getItemCount() = transactions.size
 
     fun updateData(newTransactions: List<Transaction>) {
-        val diffCallback = object : androidx.recyclerview.widget.DiffUtil.Callback() {
-            override fun getOldListSize() = transactions.size
-            override fun getNewListSize() = newTransactions.size
-
-            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                // Check if it's the exact same database row
-                return transactions[oldItemPosition].id == newTransactions[newItemPosition].id
-            }
-
-            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                // Check if any fields (amount, description, etc.) have been edited
-                return transactions[oldItemPosition] == newTransactions[newItemPosition]
-            }
-        }
-        val diffResult = androidx.recyclerview.widget.DiffUtil.calculateDiff(diffCallback)
         transactions = newTransactions
-        diffResult.dispatchUpdatesTo(this)
+        // FIX: Rip out DiffUtil. Force RecyclerView to evaluate the headers for every
+        // single item from scratch whenever the database updates.
+        notifyDataSetChanged()
     }
 }

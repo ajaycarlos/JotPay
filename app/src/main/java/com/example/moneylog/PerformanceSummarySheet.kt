@@ -62,17 +62,16 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         // FIX: Cast as NestedScrollView to match XML and prevent crashes
         val summaryContainer = view.findViewById<androidx.core.widget.NestedScrollView>(R.id.summaryContainer)
         val tvDragHint = view.findViewById<TextView>(R.id.tvDragHint)
-        val tvEmptyTimeline = view.findViewById<TextView>(R.id.tvEmptyTimeline) // <-- ADD THIS LINE
+        val tvEmptyTimeline = view.findViewById<TextView>(R.id.tvEmptyTimeline)
+        val bottomCurtain = view.findViewById<View>(R.id.bottomCurtain)
 
         // BIND MAP COMPONENTS
         val timelineMapView = view.findViewById<TimelineMapView>(R.id.timelineMapView)
         val zoomSlider = view.findViewById<Slider>(R.id.zoomSlider)
         val btnRecenter = view.findViewById<ImageButton>(R.id.btnRecenter)
         val mapControls = view.findViewById<LinearLayout>(R.id.mapControls)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val blur = RenderEffect.createBlurEffect(45f, 45f, Shader.TileMode.CLAMP)
-            mapControls.setRenderEffect(blur)
-        }
+
+        // Removed the RenderEffect blur that was destroying the UI on Android 12+ devices
 
         // BIND NEW CLOSE BUTTON
         val btnCloseMap = view.findViewById<ImageButton>(R.id.btnCloseMap)
@@ -115,8 +114,10 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             val bottomSheet = (view.parent as View)
             val behavior = BottomSheetBehavior.from(bottomSheet)
 
-            // FIX: Dynamically measure the exact height of your summary content
-            // This guarantees the sheet stops exactly under the "Drag up for Timeline" text on ANY device
+            // FIX: Position the curtain exactly where the summary container ends to cover the nav gap
+            bottomCurtain.translationY = summaryContainer.height.toFloat()
+
+            // Dynamically measure the exact height of your summary content
             behavior.peekHeight = summaryContainer.height
             behavior.state = BottomSheetBehavior.STATE_COLLAPSED
 
@@ -126,31 +127,36 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                     timelineMapView.isEnabled = newState == BottomSheetBehavior.STATE_EXPANDED
 
                     if (newState == BottomSheetBehavior.STATE_EXPANDED) {
-                        // 1. Prevent the sheet from being hidden (swiped off screen)
                         behavior.isHideable = false
-                        // 2. DISABLE ALL DRAGGING so it doesn't collapse back to the summary
                         behavior.isDraggable = false
                         btnCloseMap.visibility = View.VISIBLE
+                        // Hide the curtain fully so it doesn't block map touches
+                        bottomCurtain.visibility = View.GONE
                     } else {
-                        // Re-enable dragging and hideability for the summary view
                         behavior.isHideable = true
                         behavior.isDraggable = true
+                        bottomCurtain.visibility = View.VISIBLE
                     }
                 }
 
                 override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                    // Dashboard Fade & Slide Animation
-                    summaryContainer.alpha = 1f - (slideOffset * 1.2f).coerceAtMost(1f)
+                    // Fade animation
+                    val fadeAlpha = 1f - (slideOffset * 1.2f).coerceAtMost(1f)
+                    summaryContainer.alpha = fadeAlpha
+                    bottomCurtain.alpha = fadeAlpha // Fade curtain with the container
                     tvDragHint.alpha = 1f - slideOffset
 
-                    // Slide summary off the top only when moving UP
+                    // Slide up
                     if (slideOffset > 0) {
-                        summaryContainer.translationY = -(summaryContainer.height * slideOffset)
+                        val shift = -(summaryContainer.height * slideOffset)
+                        summaryContainer.translationY = shift
+                        bottomCurtain.translationY = summaryContainer.height + shift // Pull curtain up too
                     } else {
                         summaryContainer.translationY = 0f
+                        bottomCurtain.translationY = summaryContainer.height.toFloat()
                     }
 
-                    // Fade in 'X' button and Map controls
+                    // Map controls
                     btnCloseMap.alpha = if (slideOffset > 0.8f) (slideOffset - 0.8f) * 5f else 0f
                     btnCloseMap.visibility = if (slideOffset > 0.8f) View.VISIBLE else View.GONE
                     mapControls.alpha = if (slideOffset > 0.9f) (slideOffset - 0.9f) * 10f else 0f

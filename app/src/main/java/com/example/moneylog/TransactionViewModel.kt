@@ -298,7 +298,17 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     }
     fun restoreTransaction(transaction: Transaction) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.insert(transaction)
+            // FIX: The "Mutation Bypass"
+            // We add 1 millisecond to the timestamp and reset the local ID to 0.
+            // This tricks the SyncManager and the Cloud Server into treating this
+            // as a 100% brand new transaction, completely bypassing the race condition
+            // where the server tries to enforce the original 'Delete' command!
+            val restoredTransaction = transaction.copy(
+                id = 0,
+                timestamp = transaction.timestamp + 1L
+            )
+
+            repository.insert(restoredTransaction)
             refreshData()
         }
     }

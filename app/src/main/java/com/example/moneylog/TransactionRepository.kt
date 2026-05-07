@@ -9,14 +9,20 @@ class TransactionRepository(private val db: AppDatabase, private val syncManager
     suspend fun search(query: String) = db.transactionDao().search(query)
 
     suspend fun insert(transaction: Transaction) {
+        // FIX: Remove from pending deletes to prevent SyncWorker from destroying restored "Undo" items
+        syncManager.removePendingDelete(transaction.timestamp)
+
         // FIX: Whitelist this item so SyncWorker knows it's new/modified
         syncManager.queueEdit(transaction.timestamp)
         db.transactionDao().insert(transaction)
     }
 
     suspend fun insertAll(transactions: List<Transaction>) {
-        // Queue all items for cloud sync to maintain existing backup behavior
-        transactions.forEach { syncManager.queueEdit(it.timestamp) }
+        transactions.forEach {
+            // FIX: Clear any pending deletes during bulk imports/restores
+            syncManager.removePendingDelete(it.timestamp)
+            syncManager.queueEdit(it.timestamp)
+        }
         db.transactionDao().insertAll(transactions)
     }
 
