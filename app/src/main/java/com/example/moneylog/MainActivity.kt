@@ -1132,6 +1132,9 @@
             binding.tvUndoMessage.text = message
             binding.layoutUndoAction.visibility = View.VISIBLE
 
+            // FIX: Ensure the button is clickable when the popup first appears
+            binding.btnUndoAction.isEnabled = true
+
             // Premium float-up and fade-in animation
             binding.layoutUndoAction.animate()
                 .alpha(1f)
@@ -1141,6 +1144,9 @@
 
             // Handle Undo Click
             binding.btnUndoAction.setOnClickListener {
+                // FIX: Disable the button instantly to prevent multi-tap debounce bugs during the fade-out animation
+                binding.btnUndoAction.isEnabled = false
+
                 onUndo()
                 hideCustomUndo()
                 undoRunnable?.let { undoHandler.removeCallbacks(it) }

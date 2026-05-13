@@ -50,183 +50,166 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             }
 
             // ---------------------------------------------------------
-            // STEP 1: FETCH SERVER DATA (Network First)
+            // SMART BATCH LOOP: Keep pulling if Firebase paginates data
             // ---------------------------------------------------------
-            val serverSnapshot = ref.child("transactions").get().await()
-            val deletedSnapshot = ref.child("deleted").get().await()
+            var totalChangesCount = 0
+            var loopCount = 0
+            var keepSyncing = true
 
-            // FIX: Capture pending edits SNAPSHOT (Map<Timestamp, Token>)
-            val pendingEditsMap = syncManager.getPendingEditsSnapshot()
+            // Max 5 loops per sync to prevent infinite battery drain if network hangs
+            while (keepSyncing && loopCount < 5) {
+                loopCount++
+                var currentBatchChanges = 0
 
-            val serverDeletedIds = mutableSetOf<String>()
-            for (child in deletedSnapshot.children) {
-                child.key?.let { serverDeletedIds.add(it) }
-            }
+                // STEP 1: FETCH SERVER DATA
+                val serverSnapshot = ref.child("transactions").get().await()
+                val deletedSnapshot = ref.child("deleted").get().await()
 
-            // ---------------------------------------------------------
-            // STEP 2: PUSH LOCAL CHANGES TO SERVER
-            // ---------------------------------------------------------
-            val localData = db.transactionDao().getAll()
-            var changesCount = 0
-            val pushedKeys = mutableSetOf<String>()
+                val pendingEditsMap = syncManager.getPendingEditsSnapshot()
 
-            for (t in localData) {
-                val stableId = syncManager.generateStableId(t.timestamp)
+                val serverDeletedIds = mutableSetOf<String>()
+                for (child in deletedSnapshot.children) {
+                    child.key?.let { serverDeletedIds.add(it) }
+                }
 
-                if (serverDeletedIds.contains(stableId)) {
-                    // If server says deleted, we delete locally
-                    db.transactionDao().delete(t)
-                    changesCount++
-                } else {
-                    // Create the JSON payload including NEW FIELDS (Nature/Obligation)
-                    val jsonObject = JSONObject()
-                    jsonObject.put("o", t.originalText)
-                    jsonObject.put("a", t.amount)
-                    jsonObject.put("d", t.description)
-                    jsonObject.put("t", t.timestamp)
-                    jsonObject.put("n", t.nature)
-                    jsonObject.put("oa", t.obligationAmount)
+                // STEP 2: PUSH LOCAL CHANGES TO SERVER
+                val localData = db.transactionDao().getAll()
+                val pushedKeys = mutableSetOf<String>()
 
-                    var shouldPush = true
+                for (t in localData) {
+                    val stableId = syncManager.generateStableId(t.timestamp)
 
-                    // Check if this item is pending edit using the Map
-                    val isPendingEdit = pendingEditsMap.containsKey(t.timestamp)
-                    val pendingToken = pendingEditsMap[t.timestamp]
+                    if (serverDeletedIds.contains(stableId)) {
+                        db.transactionDao().delete(t)
+                        currentBatchChanges++
+                    } else {
+                        val jsonObject = JSONObject()
+                        jsonObject.put("o", t.originalText)
+                        jsonObject.put("a", t.amount)
+                        jsonObject.put("d", t.description)
+                        jsonObject.put("t", t.timestamp)
+                        jsonObject.put("n", t.nature)
+                        jsonObject.put("oa", t.obligationAmount)
 
-                    // Compare with Server Data to decide if we need to Push
-                    if (serverSnapshot.hasChild(stableId)) {
-                        val serverEncrypted = serverSnapshot.child(stableId).value.toString()
-                        val serverJsonStr = EncryptionHelper.decrypt(serverEncrypted, secretKey)
+                        var shouldPush = true
+                        val isPendingEdit = pendingEditsMap.containsKey(t.timestamp)
+                        val pendingToken = pendingEditsMap[t.timestamp]
 
-                        if (serverJsonStr.isNotEmpty()) {
-                            try {
-                                val serverObj = JSONObject(serverJsonStr)
-                                val sText = serverObj.optString("o")
+                        if (serverSnapshot.hasChild(stableId)) {
+                            val serverEncrypted = serverSnapshot.child(stableId).value.toString()
+                            val serverJsonStr = EncryptionHelper.decrypt(serverEncrypted, secretKey)
 
-                                // FIX: Use Long for financial precision to match Transaction entity
-                                val sAmt = serverObj.optLong("a")
-                                val sDesc = serverObj.optString("d")
+                            if (serverJsonStr.isNotEmpty()) {
+                                try {
+                                    val serverObj = JSONObject(serverJsonStr)
+                                    val sText = serverObj.optString("o")
+                                    val sAmt = serverObj.optLong("a")
+                                    val sDesc = serverObj.optString("d")
+                                    val sNature = serverObj.optString("n", "NORMAL")
+                                    val sObligation = serverObj.optLong("oa", 0L)
 
-                                // FIX: Safe Defaults for Cross-Version Compatibility using Long
-                                val sNature = serverObj.optString("n", "NORMAL")
-                                val sObligation = serverObj.optLong("oa", 0L)
+                                    val isExactMatch = (sText == t.originalText) &&
+                                            (sAmt == t.amount) &&
+                                            (sDesc == t.description) &&
+                                            (sNature == t.nature) &&
+                                            (sObligation == t.obligationAmount)
 
-                                // Strict Comparison: Use direct equality for Long cents
-                                val isAmtMatch = sAmt == t.amount
-                                val isObliMatch = sObligation == t.obligationAmount
-
-                                val isExactMatch = (sText == t.originalText) &&
-                                        isAmtMatch &&
-                                        (sDesc == t.description) &&
-                                        (sNature == t.nature) &&
-                                        isObliMatch
-
-                                if (isExactMatch) {
-                                    shouldPush = false // Data is identical, no push needed
-                                    // FIX: Remove pending flag ONLY if token matches
-                                    if (isPendingEdit && pendingToken != null) {
-                                        syncManager.removePendingEdit(t.timestamp, pendingToken)
-                                    }
-                                } else {
-                                    // Conflict: If local isn't pending edit, assume Server Wins (unless Force Push)
-                                    if (!forcePush && !isPendingEdit) {
+                                    if (isExactMatch) {
                                         shouldPush = false
+                                        if (isPendingEdit && pendingToken != null) {
+                                            syncManager.removePendingEdit(t.timestamp, pendingToken)
+                                        }
+                                    } else {
+                                        if (!forcePush && !isPendingEdit) shouldPush = false
                                     }
+                                } catch (e: Exception) {
+                                    shouldPush = true
                                 }
-                            } catch (e: Exception) {
-                                shouldPush = true // JSON error? Push our valid version.
                             }
                         }
-                    }
 
-                    if (shouldPush) {
-                        val encryptedData = EncryptionHelper.encrypt(jsonObject.toString(), secretKey)
-                        // Add .await() so WorkManager doesn't kill the process before Firebase finishes!
-                        ref.child("transactions").child(stableId).setValue(encryptedData).await()
-                        pushedKeys.add(stableId)
+                        if (shouldPush) {
+                            val encryptedData = EncryptionHelper.encrypt(jsonObject.toString(), secretKey)
+                            ref.child("transactions").child(stableId).setValue(encryptedData).await()
+                            pushedKeys.add(stableId)
 
-                        // FIX: Remove pending flag ONLY if token matches
-                        if (isPendingEdit && pendingToken != null) {
-                            syncManager.removePendingEdit(t.timestamp, pendingToken)
+                            if (isPendingEdit && pendingToken != null) {
+                                syncManager.removePendingEdit(t.timestamp, pendingToken)
+                            }
                         }
                     }
                 }
-            }
 
-            // ---------------------------------------------------------
-            // STEP 3: PULL SERVER UPDATES TO LOCAL
-            // ---------------------------------------------------------
-            for (child in serverSnapshot.children) {
-                val serverKey = child.key ?: continue
-                if (pushedKeys.contains(serverKey)) continue
+                // STEP 3: PULL SERVER UPDATES TO LOCAL
+                for (child in serverSnapshot.children) {
+                    val serverKey = child.key ?: continue
+                    if (pushedKeys.contains(serverKey)) continue
 
-                val encryptedJson = child.getValue(String::class.java) ?: continue
-                val jsonStr = EncryptionHelper.decrypt(encryptedJson, secretKey)
+                    val encryptedJson = child.getValue(String::class.java) ?: continue
+                    val jsonStr = EncryptionHelper.decrypt(encryptedJson, secretKey)
 
-                if (jsonStr.isNotEmpty()) {
-                    try {
-                        val jsonObject = JSONObject(jsonStr)
-                        val originalText = jsonObject.optString("o")
+                    if (jsonStr.isNotEmpty()) {
+                        try {
+                            val jsonObject = JSONObject(jsonStr)
+                            val originalText = jsonObject.optString("o")
+                            val amount = jsonObject.optLong("a")
+                            val desc = jsonObject.optString("d")
+                            val timestamp = jsonObject.optLong("t")
+                            val nature = jsonObject.optString("n", "NORMAL")
+                            val obligationAmount = jsonObject.optLong("oa", 0L)
 
-                        // FIX: Use Long for financial precision to match Transaction entity
-                        val amount = jsonObject.optLong("a")
-                        val desc = jsonObject.optString("d")
-                        val timestamp = jsonObject.optLong("t")
+                            val freshPendingDeletes = syncManager.getPendingDeletes()
+                            if (freshPendingDeletes.contains(timestamp.toString())) continue
+                            if (syncManager.hasPendingEdit(timestamp)) continue
 
-                        val nature = jsonObject.optString("n", "NORMAL")
-                        val obligationAmount = jsonObject.optLong("oa", 0L)
+                            val existing = db.transactionDao().getByTimestamp(timestamp)
 
-                        // FIX: GET FRESH LISTS TO PREVENT OVERWRITING NEW LOCAL EDITS
-                        val freshPendingDeletes = syncManager.getPendingDeletes()
-                        if (freshPendingDeletes.contains(timestamp.toString())) continue
-
-                        if (syncManager.hasPendingEdit(timestamp)) continue
-
-                        // FIX: Initialize 'existing' to resolve compilation error
-                        val existing = db.transactionDao().getByTimestamp(timestamp)
-
-                        if (existing == null) {
-                            // Insert New
-                            db.transactionDao().insert(Transaction(
-                                originalText = originalText,
-                                amount = amount,
-                                description = desc,
-                                timestamp = timestamp,
-                                nature = nature,
-                                obligationAmount = obligationAmount
-                            ))
-                            changesCount++
-                        } else {
-                            // Update Existing using precise Long comparison
-                            val isAmtDiff = existing.amount != amount
-                            val isObliDiff = existing.obligationAmount != obligationAmount
-
-                            // If ANYTHING changed (including nature), update local DB
-                            if (existing.originalText != originalText ||
-                                isAmtDiff ||
-                                existing.description != desc ||
-                                existing.nature != nature ||
-                                isObliDiff) {
-
-                                val updated = existing.copy(
+                            if (existing == null) {
+                                db.transactionDao().insert(Transaction(
                                     originalText = originalText,
                                     amount = amount,
                                     description = desc,
+                                    timestamp = timestamp,
                                     nature = nature,
                                     obligationAmount = obligationAmount
-                                )
-                                db.transactionDao().update(updated)
-                                changesCount++
+                                ))
+                                currentBatchChanges++
+                            } else {
+                                if (existing.originalText != originalText ||
+                                    existing.amount != amount ||
+                                    existing.description != desc ||
+                                    existing.nature != nature ||
+                                    existing.obligationAmount != obligationAmount) {
+
+                                    val updated = existing.copy(
+                                        originalText = originalText,
+                                        amount = amount,
+                                        description = desc,
+                                        nature = nature,
+                                        obligationAmount = obligationAmount
+                                    )
+                                    db.transactionDao().update(updated)
+                                    currentBatchChanges++
+                                }
                             }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
                     }
+                }
+
+                // Evaluate Loop Condition
+                totalChangesCount += currentBatchChanges
+                if (currentBatchChanges == 0) {
+                    keepSyncing = false // Steady state reached, all logs are synced.
+                } else {
+                    // Small delay to allow Firebase to pull the next chunk into its local cache
+                    kotlinx.coroutines.delay(500)
                 }
             }
 
             db.close()
-            val msg = if (changesCount > 0) "Synced: $changesCount updates" else "Sync Complete"
+            val msg = if (totalChangesCount > 0) "Synced: $totalChangesCount updates" else "Sync Complete"
             return Result.success(workDataOf("MSG" to msg))
 
         } catch (e: Exception) {
