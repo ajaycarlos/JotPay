@@ -1172,10 +1172,8 @@
             val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
             if (!prefs.getBoolean("is_first_launch", true)) return
 
-            // FIX: Prevent Lifecycle Race Conditions on low-RAM devices.
-            // Mark the tutorial as seen IMMEDIATELY before starting it.
-            // This ensures that even if the OS aggressively kills the Activity
-            // while the tutorial is open, it will never restart the loop.
+            // HOTFIX: Save state instantly to prevent tutorial looping if the user
+            // kills the app or accepts an update before finishing the sequence.
             prefs.edit().putBoolean("is_first_launch", false).apply()
 
             TapTargetSequence(this)
@@ -1232,14 +1230,11 @@
                 )
                 .listener(object : TapTargetSequence.Listener {
                     override fun onSequenceFinish() {
-                        // Only mark as finished when they complete it
-                        prefs.edit().putBoolean("is_first_launch", false).apply()
-                        // Restore normal visibility logic based on whether they are actually typing
+                        // The state is already saved at the top, so we just restore UI
                         updateSignToggleVisibility()
                     }
                     override fun onSequenceStep(lastTarget: TapTarget, targetClicked: Boolean) {}
                     override fun onSequenceCanceled(lastTarget: TapTarget) {
-                        // Restore normal visibility if they cancel
                         updateSignToggleVisibility()
                     }
                 })
