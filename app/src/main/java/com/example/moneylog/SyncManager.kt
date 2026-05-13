@@ -115,9 +115,18 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         return id!!
     }
 
+    fun purgeSyncQueue() {
+        // FIX: Use .commit() instead of .apply() to force synchronous execution.
+        // This prevents the race condition where new edits are queued before the wipe finishes.
+        prefs.edit()
+            .remove("pending_deletes")
+            .remove("pending_edits")
+            .commit()
+    }
+
     fun unlinkDevice() {
+        purgeSyncQueue() // Clear old history first
         val newVault = UUID.randomUUID().toString()
-        // FIX: Use SecureRandom to generate a true 128-bit key, encoded safely as Base64
         val randomBytes = ByteArray(16)
         java.security.SecureRandom().nextBytes(randomBytes)
         val newKey = android.util.Base64.encodeToString(randomBytes, android.util.Base64.NO_WRAP)

@@ -41,12 +41,11 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnTabAssets"
-            style="@style/Widget.Material3.Button.TonalButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Assets"
-            android:textColor="@color/text_primary"
-            android:backgroundTint="@color/income_muted"
+            android:textColor="@color/text_secondary"
             android:layout_marginEnd="12dp"/>
 
         <com.google.android.material.button.MaterialButton

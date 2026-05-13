@@ -94,7 +94,8 @@
                 integrator.setPrompt("Scan QR code from the other device")
                 integrator.setCameraId(0)
                 integrator.setBeepEnabled(true)
-                integrator.setOrientationLocked(true)
+                // FIX: Set to false so the scanner dynamically respects the phone's auto-rotate and current orientation
+                integrator.setOrientationLocked(false)
                 integrator.initiateScan()
             }
 
@@ -195,10 +196,10 @@
                         Toast.makeText(this@LinkDeviceActivity, "Unlinked. You are now on a fresh account.", Toast.LENGTH_LONG).show()
 
                         // 3. Restart Activity Cleanly
-                        // FIX 10: Use flags to clear the entire back stack and start fresh.
-                        // This prevents memory leaks and ensures no "ghost" activities remain.
+                        // FIX: Removed the CLEAR_TASK flags.
+                        // This safely refreshes the Link page to show the new QR code
+                        // while perfectly preserving MainActivity underneath for the back button.
                         val intent = Intent(this@LinkDeviceActivity, LinkDeviceActivity::class.java)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                         startActivity(intent)
                         finish()
                     }
@@ -263,21 +264,21 @@
 
                             withContext(Dispatchers.Main) {
                                 if (existingTransactions.isEmpty()) {
-                                    // Log is empty, link immediately
-                                    applyNewVaultAndFinish(scannedVault, scannedKey)
+                                    // Log is empty, link immediately (No merge needed)
+                                    applyNewVaultAndFinish(scannedVault, scannedKey, isMerging = false)
                                 } else {
                                     // Log is not empty, show Merge/Overwrite dialog
                                     MaterialAlertDialogBuilder(this@LinkDeviceActivity)
                                         .setTitle("Link Device")
                                         .setMessage("You already have logs on this device.\nDo you want to merge them with the new linked device or replace them entirely?")
                                         .setPositiveButton("Merge") { _, _ ->
-                                            applyNewVaultAndFinish(scannedVault, scannedKey)
+                                            applyNewVaultAndFinish(scannedVault, scannedKey, isMerging = true)
                                         }
                                         .setNeutralButton("Overwrite") { _, _ ->
                                             lifecycleScope.launch(Dispatchers.IO) {
                                                 db.transactionDao().deleteAll() // Clear local DB first
                                                 withContext(Dispatchers.Main) {
-                                                    applyNewVaultAndFinish(scannedVault, scannedKey)
+                                                    applyNewVaultAndFinish(scannedVault, scannedKey, isMerging = false)
                                                 }
                                             }
                                         }
@@ -296,7 +297,10 @@
             }
         }
 
-        private fun applyNewVaultAndFinish(scannedVault: String, scannedKey: String) {
+        private fun applyNewVaultAndFinish(scannedVault: String, scannedKey: String, isMerging: Boolean) {
+            // 1. Clear old sync markers synchronously
+            syncManager.purgeSyncQueue()
+
             val prefs = getSharedPreferences("jotpay_sync", Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("vault_id", scannedVault)
@@ -305,17 +309,27 @@
 
             currentVaultId = scannedVault
 
-            if (isOnline()) {
-                Toast.makeText(this, "Device Linked Successfully", Toast.LENGTH_LONG).show()
-                registerDeviceOnServer(scannedVault)
+            lifecycleScope.launch(Dispatchers.IO) {
+                if (isMerging) {
+                    // 2. If merging, strictly queue all local data to be pushed to the new vault
+                    val allLocal = db.transactionDao().getAll()
+                    for (t in allLocal) {
+                        syncManager.queueEdit(t.timestamp)
+                    }
+                }
 
-                syncManager.scheduleSync(forcePush = true)
-
-            } else {
-                Toast.makeText(this, "Linked (Offline). Sync pending.", Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) {
+                    if (isOnline()) {
+                        Toast.makeText(this@LinkDeviceActivity, if (isMerging) "Merging Devices..." else "Device Linked", Toast.LENGTH_LONG).show()
+                        registerDeviceOnServer(scannedVault)
+                        // FIX: If merging, force the push so B's data is guaranteed to reach the server.
+                        syncManager.scheduleSync(forcePush = isMerging)
+                    } else {
+                        Toast.makeText(this@LinkDeviceActivity, "Linked (Offline). Sync pending.", Toast.LENGTH_LONG).show()
+                    }
+                    finish()
+                }
             }
-
-            finish()
         }
 
     }

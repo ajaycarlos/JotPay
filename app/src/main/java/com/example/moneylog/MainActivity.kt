@@ -290,8 +290,11 @@
                     container,
                     android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
                     android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                    true
+                    false // FIX: Make non-focusable so it doesn't steal focus and close the keyboard
                 )
+                // Allow tapping outside the bubble to dismiss it (requires a transparent background to work on all devices)
+                popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                popup.isOutsideTouchable = true
                 popup.elevation = 24f
 
                 fun createRow(text: String, colorRes: Int, nature: String) {
@@ -330,7 +333,11 @@
             }
 
             binding.cardBalance.setOnClickListener {
-                showSummarySheet()
+                // FIX: Prevent the summary sheet from opening if a search is active.
+                // It will now only open when viewing the main dashboard.
+                if (binding.etSearch.visibility != View.VISIBLE) {
+                    showSummarySheet()
+                }
             }
 
             binding.btnCancelEdit.setOnClickListener {
@@ -1159,16 +1166,15 @@
             val prefs = getSharedPreferences("moneylog_prefs", Context.MODE_PRIVATE)
             if (!prefs.getBoolean("is_first_launch", true)) return
 
-            // FIX 1: Force the button bar and all buttons to be visible so the tutorial doesn't crash
-            binding.layoutSignToggles.visibility = View.VISIBLE
-            binding.layoutSignToggles.alpha = 1f
-            binding.btnPlus.visibility = View.VISIBLE
-            binding.btnMinus.visibility = View.VISIBLE
-            binding.btnSpace.visibility = View.VISIBLE
+            // FIX: Prevent Lifecycle Race Conditions on low-RAM devices.
+            // Mark the tutorial as seen IMMEDIATELY before starting it.
+            // This ensures that even if the OS aggressively kills the Activity
+            // while the tutorial is open, it will never restart the loop.
+            prefs.edit().putBoolean("is_first_launch", false).apply()
 
             TapTargetSequence(this)
                 .targets(
-                    TapTarget.forView(binding.btnPlus, "Add Income", "Tap '+' to log money coming in.")
+                    TapTarget.forView(binding.btnPlus, "Add Income", "Tap '+' to log money going in.")
                         .outerCircleColor(R.color.income_green)
                         .targetCircleColor(R.color.white)
                         .transparentTarget(true)

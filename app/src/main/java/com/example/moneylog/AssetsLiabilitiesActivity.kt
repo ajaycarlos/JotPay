@@ -57,6 +57,9 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
         binding.btnTabAssets.setOnClickListener { switchTab(true) }
         binding.btnTabLiabilities.setOnClickListener { switchTab(false) }
 
+        // FIX: Force initial style setup on activity creation
+        updateTabStyles()
+
         // NEW: Search Listener
         binding.etSearch.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
@@ -69,33 +72,38 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
     }
 
     private fun switchTab(showAssets: Boolean) {
-        if (isAssetsTab == showAssets) return // Avoid redundant refresh
+        if (isAssetsTab == showAssets) return
 
         isAssetsTab = showAssets
 
-        // Clear search when switching tabs to avoid confusion
         currentSearchQuery = ""
         binding.etSearch.setText("")
         binding.etSearch.clearFocus()
 
-        if (showAssets) {
+        updateTabStyles()
+        updateDisplay()
+    }
+
+    private fun updateTabStyles() {
+        if (isAssetsTab) {
             styleButton(binding.btnTabAssets, true, R.color.income_muted)
             styleButton(binding.btnTabLiabilities, false, R.color.expense_muted)
         } else {
             styleButton(binding.btnTabAssets, false, R.color.income_muted)
             styleButton(binding.btnTabLiabilities, true, R.color.expense_muted)
         }
-
-        updateDisplay()
     }
 
     private fun styleButton(btn: MaterialButton, isActive: Boolean, activeColorRes: Int) {
         if (isActive) {
+            // Active: Tonal Look (Tinted background, no stroke)
             btn.backgroundTintList = ContextCompat.getColorStateList(this, activeColorRes)
             btn.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
             btn.strokeWidth = 0
         } else {
-            btn.backgroundTintList = ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+            // Inactive: Outlined Look (Transparent background, stroke)
+            // Set tint to null to clear any persistent color cache from Material3
+            btn.backgroundTintList = null
             btn.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
             btn.strokeColor = ContextCompat.getColorStateList(this, R.color.text_tertiary)
             btn.strokeWidth = 2
