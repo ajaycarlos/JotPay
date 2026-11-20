@@ -227,6 +227,22 @@
                 app:tint="@color/text_secondary"
                 android:visibility="visible"/>
         </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnJumpToLatest"
+            android:layout_width="36dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_sign_toggle_outline"
+            android:src="@drawable/ic_jump_to_latest"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Jump to latest log"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/layoutInput"
+            app:layout_constraintEnd_toEndOf="parent" />
+
         <LinearLayout
             android:id="@+id/layoutUndoAction"
             android:layout_width="wrap_content"
