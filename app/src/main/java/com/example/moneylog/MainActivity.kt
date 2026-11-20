@@ -250,6 +250,8 @@
             }
             binding.rvTransactions.layoutManager = LinearLayoutManager(this)
             binding.rvTransactions.adapter = adapter
+            binding.rvTransactions.edgeEffectFactory =
+                BottomBounceEdgeEffectFactory(binding.rvTransactions)
         }
 
         private fun setupListeners() {
