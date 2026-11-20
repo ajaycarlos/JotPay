@@ -54,6 +54,10 @@
 
     class MainActivity : AppCompatActivity() {
 
+        private companion object {
+            const val JUMP_TO_LATEST_SHOW_AFTER_POSITION = 3
+        }
+
         private lateinit var binding: ActivityMainBinding
         private val viewModel: TransactionViewModel by viewModels()
         private lateinit var adapter: TransactionAdapter
@@ -175,6 +179,7 @@
         private fun observeViewModel() {
             viewModel.transactions.observe(this) { list ->
                 adapter.updateData(list)
+                updateJumpToLatestVisibility()
                 updateAutocomplete(list)
 
                 if (pendingEditId != 0L) {
@@ -252,6 +257,23 @@
             binding.rvTransactions.adapter = adapter
             binding.rvTransactions.edgeEffectFactory =
                 BottomBounceEdgeEffectFactory(binding.rvTransactions)
+
+            binding.rvTransactions.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                    updateJumpToLatestVisibility()
+                }
+            })
+
+            binding.btnJumpToLatest.setOnClickListener {
+                binding.rvTransactions.scrollToPosition(0)
+            }
+        }
+
+        private fun updateJumpToLatestVisibility() {
+            val layoutManager = binding.rvTransactions.layoutManager as? LinearLayoutManager ?: return
+            val firstVisiblePosition = layoutManager.findFirstVisibleItemPosition()
+            val shouldShow = firstVisiblePosition > JUMP_TO_LATEST_SHOW_AFTER_POSITION
+            binding.btnJumpToLatest.visibility = if (shouldShow) View.VISIBLE else View.GONE
         }
 
         private fun setupListeners() {
@@ -658,6 +680,7 @@
                 binding.btnPlus.setForceDarkAllowed(false)
                 binding.btnMinus.setForceDarkAllowed(false)
                 binding.btnSpace.setForceDarkAllowed(false)
+                binding.btnJumpToLatest.setForceDarkAllowed(false)
             }
 
             binding.btnPlus.setOnClickListener { insertSign("+") }
