@@ -10,10 +10,13 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
         android:gravity="center_vertical"
-        android:background="@color/bg_surface"
-        android:elevation="4dp">
+        android:background="@color/bg_app"
+        android:elevation="0dp">
 
         <ImageView
             android:id="@+id/btnBack"
