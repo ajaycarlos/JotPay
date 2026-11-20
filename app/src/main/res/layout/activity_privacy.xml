@@ -6,8 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_app"
-    android:padding="24dp"
-    android:forceDarkAllowed="false">
+    android:padding="24dp">
 
     <TextView
         android:id="@+id/tvTitle"
