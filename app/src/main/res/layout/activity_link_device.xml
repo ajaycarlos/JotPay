@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_app"
-    android:padding="24dp">
+    android:padding="20dp">
 
     <ImageView
         android:id="@+id/btnBack"
@@ -27,7 +27,7 @@
         android:layout_height="wrap_content"
         android:text="Link Devices"
         android:textColor="@color/text_primary"
-        android:textSize="24sp"
+        android:textSize="22sp"
         android:textStyle="bold"
         android:layout_marginStart="16dp"
         app:layout_constraintStart_toEndOf="@id/btnBack"
@@ -49,7 +49,7 @@
         android:id="@+id/cardQr"
         android:layout_width="250dp"
         android:layout_height="250dp"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="24dp"
         app:cardBackgroundColor="@color/surface_card"
         app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
@@ -95,9 +95,9 @@
         android:layout_height="64dp"
         android:layout_marginTop="24dp"
         android:text="GUEST: Scan QR to Bring Data Here"
-        android:backgroundTint="@color/green_primary"
-        android:textColor="@color/white"
-        app:cornerRadius="12dp"
+        android:backgroundTint="@color/income_green"
+        android:textColor="@color/bg_app"
+        app:cornerRadius="16dp"
         app:icon="@drawable/ic_search"
         app:iconGravity="textStart"
         app:layout_constraintTop_toBottomOf="@id/tvOr" />
