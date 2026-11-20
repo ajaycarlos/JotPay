@@ -7,8 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    android:background="@color/bg_app"
-    android:forceDarkAllowed="false">
+    android:background="@color/bg_app">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -60,7 +59,7 @@
             android:layout_marginStart="16dp"
             android:layout_marginTop="8dp"
             android:layout_marginEnd="16dp"
-            android:padding="20dp"
+            android:padding="24dp"
             android:clickable="true"
             android:focusable="true"
             android:foreground="@null"
@@ -94,7 +93,7 @@
             android:id="@+id/etSearch"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_input_field"
+            android:background="@drawable/bg_message_card"
             android:hint="Search..."
             android:padding="12dp"
             android:paddingEnd="48dp"
