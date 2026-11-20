@@ -3,8 +3,8 @@
     <solid android:color="@color/drawer_surface"/>
 
     <corners
-        android:topRightRadius="24dp"
-        android:bottomRightRadius="24dp"
+        android:topRightRadius="28dp"
+        android:bottomRightRadius="28dp"
         android:topLeftRadius="0dp"
         android:bottomLeftRadius="0dp"/>
 
