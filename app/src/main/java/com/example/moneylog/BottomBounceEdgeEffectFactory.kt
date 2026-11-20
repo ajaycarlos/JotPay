@@ -1,6 +1,7 @@
 package com.example.moneylog
 
 import android.graphics.Canvas
+import android.os.Build
 import android.view.animation.DecelerateInterpolator
 import android.widget.EdgeEffect
 import androidx.recyclerview.widget.RecyclerView
@@ -11,15 +12,15 @@ import kotlin.math.abs
  * past its bottom edge. The top edge is left to SwipeRefreshLayout so
  * pull-to-refresh keeps its existing behaviour.
  *
- * The effect is implemented here rather than relying on platform EdgeEffect
- * rendering, so it behaves consistently across Android versions.
+ * Android 12+ uses the platform's native stretch effect. Earlier Android
+ * versions use the custom scale-based fallback below.
  */
 class BottomBounceEdgeEffectFactory(
     private val recyclerView: RecyclerView
 ) : RecyclerView.EdgeEffectFactory() {
 
     override fun createEdgeEffect(view: RecyclerView, direction: Int): EdgeEffect {
-        if (direction != DIRECTION_BOTTOM) {
+        if (direction != DIRECTION_BOTTOM || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return super.createEdgeEffect(view, direction)
         }
 
