@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.example.moneylog"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.ajaydev.jotpay"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 220
-        versionName = "3.6.1"
+        targetSdk = 36
+        versionCode = 221
+        versionName = "3.6.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
