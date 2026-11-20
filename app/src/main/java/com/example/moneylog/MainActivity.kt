@@ -265,7 +265,7 @@
             })
 
             binding.btnJumpToLatest.setOnClickListener {
-                binding.rvTransactions.smoothScrollToPosition(0)
+                binding.rvTransactions.scrollToPosition(0)
             }
         }
 
