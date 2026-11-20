@@ -650,6 +650,14 @@
         }
 
         private fun setupSignToggles() {
+            // Keep these custom-styled controls unchanged when Android/MIUI applies forced dark mode.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                binding.layoutSignToggles.setForceDarkAllowed(false)
+                binding.btnPlus.setForceDarkAllowed(false)
+                binding.btnMinus.setForceDarkAllowed(false)
+                binding.btnSpace.setForceDarkAllowed(false)
+            }
+
             binding.btnPlus.setOnClickListener { insertSign("+") }
             binding.btnMinus.setOnClickListener { insertSign("-") }
             binding.btnSpace.setOnClickListener { insertSign(" ") }
