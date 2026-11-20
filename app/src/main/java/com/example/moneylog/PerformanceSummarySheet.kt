@@ -85,18 +85,18 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         val tvPeriodDebits = view.findViewById<TextView>(R.id.tvPeriodDebits)
         val progressCashFlow = view.findViewById<LinearProgressIndicator>(R.id.progressCashFlow)
 
-        // BIND AND ENLARGE TEXT SIZES FOR BOXES
-        val tvTodayIncome = view.findViewById<TextView>(R.id.tvTodayIncome).apply { textSize = 15f }
-        val tvTodayExpense = view.findViewById<TextView>(R.id.tvTodayExpense).apply { textSize = 15f }
-        val tvTodayNet = view.findViewById<TextView>(R.id.tvTodayNet).apply { textSize = 18f }
+        // Use the compact text hierarchy defined in sheet_performance.xml.
+        val tvTodayIncome = view.findViewById<TextView>(R.id.tvTodayIncome)
+        val tvTodayExpense = view.findViewById<TextView>(R.id.tvTodayExpense)
+        val tvTodayNet = view.findViewById<TextView>(R.id.tvTodayNet)
 
-        val tvWeekIncome = view.findViewById<TextView>(R.id.tvWeekIncome).apply { textSize = 15f }
-        val tvWeekExpense = view.findViewById<TextView>(R.id.tvWeekExpense).apply { textSize = 15f }
-        val tvWeekNet = view.findViewById<TextView>(R.id.tvWeekNet).apply { textSize = 18f }
+        val tvWeekIncome = view.findViewById<TextView>(R.id.tvWeekIncome)
+        val tvWeekExpense = view.findViewById<TextView>(R.id.tvWeekExpense)
+        val tvWeekNet = view.findViewById<TextView>(R.id.tvWeekNet)
 
-        val tvMonthIncome = view.findViewById<TextView>(R.id.tvMonthIncome).apply { textSize = 15f }
-        val tvMonthExpense = view.findViewById<TextView>(R.id.tvMonthExpense).apply { textSize = 15f }
-        val tvMonthNet = view.findViewById<TextView>(R.id.tvMonthNet).apply { textSize = 18f }
+        val tvMonthIncome = view.findViewById<TextView>(R.id.tvMonthIncome)
+        val tvMonthExpense = view.findViewById<TextView>(R.id.tvMonthExpense)
+        val tvMonthNet = view.findViewById<TextView>(R.id.tvMonthNet)
 
         // Initialize Map Controls
         mapControls.alpha = 0f
