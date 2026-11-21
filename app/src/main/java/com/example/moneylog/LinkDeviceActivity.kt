@@ -22,8 +22,6 @@
             import com.journeyapps.barcodescanner.BarcodeEncoder
             import org.json.JSONObject
             import java.util.UUID
-    import androidx.core.view.ViewCompat
-    import androidx.core.view.WindowInsetsCompat
     import androidx.lifecycle.lifecycleScope
     import kotlinx.coroutines.Dispatchers
     import kotlinx.coroutines.launch
@@ -44,18 +42,7 @@
             binding = ActivityLinkDeviceBinding.inflate(layoutInflater)
             setContentView(binding.root)
 
-            ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-
-                // Convert 24dp to actual pixels for your specific tablet screen
-                val density = resources.displayMetrics.density
-                val sidePaddingPx = (24 * density).toInt()
-
-                // Apply: Original side padding, System top padding, and Original bottom padding
-                v.setPadding(sidePaddingPx, systemBars.top, sidePaddingPx, sidePaddingPx)
-
-                insets
-            }
+            EdgeToEdgeCompat.apply(window, binding.root)
 
             db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "moneylog-db").build()
             syncManager = SyncManager(this, db) //SyncManager
