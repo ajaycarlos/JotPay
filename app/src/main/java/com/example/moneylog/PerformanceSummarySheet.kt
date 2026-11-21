@@ -171,6 +171,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
 
         // Keep rest of observation logic intact
         var isSliderInitialized = false
+        var isApplyingPreset = false
         var availableDays: List<Long> = emptyList()
         var presetRangeLabel: String? = "ALL TIME"
         val sliderDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
@@ -228,7 +229,9 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 days.indexOfFirst { it >= startTimestamp }.let { if (it < 0) days.lastIndex else it }
             }
             if (days.size > 1 && dateSlider.visibility == View.VISIBLE) {
+                isApplyingPreset = true
                 dateSlider.values = listOf(startIndex.toFloat(), endIndex.toFloat())
+                isApplyingPreset = false
             }
 
             viewModel.setDateRange(startTimestamp, endTimestamp)
@@ -271,9 +274,11 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 dateSlider.addOnChangeListener { slider, _, _ ->
                     val sIdx = slider.values[0].toInt().coerceIn(days.indices)
                     val eIdx = slider.values[1].toInt().coerceIn(days.indices)
-                    presetRangeLabel = null
-                    tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
-                    selectPreset(null)
+                    if (!isApplyingPreset) {
+                        presetRangeLabel = null
+                        tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
+                        selectPreset(null)
+                    }
                 }
 
                 dateSlider.addOnSliderTouchListener(object : RangeSlider.OnSliderTouchListener {
