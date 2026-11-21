@@ -25,7 +25,7 @@
         </activity>
         <activity android:name=".PrivacyActivity" />
         <activity android:name=".FaqActivity" />
-        <activity android:name=".AboutActivity" android:screenOrientation="portrait"/>
+        <activity android:name=".AboutActivity"/>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
@@ -38,7 +38,6 @@
 
         <activity
             android:name=".LinkDeviceActivity"
-            android:screenOrientation="portrait"
             android:exported="false" />
 
         <activity android:name=".AssetsLiabilitiesActivity" />
