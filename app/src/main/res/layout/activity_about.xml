@@ -244,7 +244,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="thecarlos.in"
+                        android:text="ajaycarlos.is-a.dev"
                         android:textColor="@color/income_green"
                         android:textSize="15sp"
                         android:textStyle="bold"/>
