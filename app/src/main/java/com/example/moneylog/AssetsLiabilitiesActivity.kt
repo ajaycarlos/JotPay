@@ -13,8 +13,6 @@ import com.example.moneylog.databinding.ActivityAssetsLiabilitiesBinding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlin.math.abs
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 
 class AssetsLiabilitiesActivity : AppCompatActivity() {
 
@@ -29,11 +27,7 @@ class AssetsLiabilitiesActivity : AppCompatActivity() {
         binding = ActivityAssetsLiabilitiesBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
+        EdgeToEdgeCompat.apply(window, binding.root)
 
         setupUI()
         setupObservers()
