@@ -172,6 +172,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         // Keep rest of observation logic intact
         var isSliderInitialized = false
         var availableDays: List<Long> = emptyList()
+        var presetRangeLabel: String? = "ALL TIME"
         val sliderDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
 
         fun selectPreset(selected: TextView?) {
@@ -192,26 +193,46 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             if (days.isEmpty()) return
 
             val endIndex = days.lastIndex
-            val startIndex = if (daysBack == null) {
-                0
-            } else {
-                val threshold = days[endIndex] - daysBack
-                days.indexOfFirst { it >= threshold }.let { if (it < 0) 0 else it }
+            val startCalendar = java.util.Calendar.getInstance()
+            startCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            startCalendar.set(java.util.Calendar.MINUTE, 0)
+            startCalendar.set(java.util.Calendar.SECOND, 0)
+            startCalendar.set(java.util.Calendar.MILLISECOND, 0)
+
+            val endCalendar = (startCalendar.clone() as java.util.Calendar).apply {
+                add(java.util.Calendar.DAY_OF_YEAR, 1)
+                add(java.util.Calendar.MILLISECOND, -1)
             }
 
+            val startTimestamp: Long
+            val endTimestamp: Long
+            if (daysBack == null) {
+                startTimestamp = 0L
+                endTimestamp = Long.MAX_VALUE
+                presetRangeLabel = "ALL TIME"
+            } else {
+                // Use calendar days, not the first/last transaction timestamps.
+                // 1W includes today and the previous 6 days; 1M includes today and
+                // the previous 29 days. This keeps the presets distinct even when
+                // there are days with no transactions.
+                val numberOfDays = (daysBack / (24L * 60L * 60L * 1000L)).toInt()
+                startCalendar.add(java.util.Calendar.DAY_OF_YEAR, -(numberOfDays - 1))
+                startTimestamp = startCalendar.timeInMillis
+                endTimestamp = endCalendar.timeInMillis
+                presetRangeLabel = "${sliderDateFormat.format(Date(startTimestamp))}  —  ${sliderDateFormat.format(Date(endCalendar.timeInMillis))}".uppercase()
+            }
+
+            // The slider represents days that contain transactions; snap its handles
+            // to the nearest available entries without changing the actual date filter.
+            val startIndex = if (daysBack == null) 0 else {
+                days.indexOfFirst { it >= startTimestamp }.let { if (it < 0) days.lastIndex else it }
+            }
             if (days.size > 1 && dateSlider.visibility == View.VISIBLE) {
                 dateSlider.values = listOf(startIndex.toFloat(), endIndex.toFloat())
             }
 
-            viewModel.setDateRange(
-                if (daysBack == null) 0L else days[startIndex],
-                if (daysBack == null) Long.MAX_VALUE else days[endIndex]
-            )
-            tvDateRangeLabel.text = if (daysBack == null) {
-                "ALL TIME"
-            } else {
-                "${sliderDateFormat.format(Date(days[startIndex]))}  —  ${sliderDateFormat.format(Date(days[endIndex]))}".uppercase()
-            }
+            viewModel.setDateRange(startTimestamp, endTimestamp)
+            tvDateRangeLabel.text = presetRangeLabel
         }
 
         tvPresetWeek.setOnClickListener {
@@ -250,6 +271,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 dateSlider.addOnChangeListener { slider, _, _ ->
                     val sIdx = slider.values[0].toInt().coerceIn(days.indices)
                     val eIdx = slider.values[1].toInt().coerceIn(days.indices)
+                    presetRangeLabel = null
                     tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
                     selectPreset(null)
                 }
@@ -268,9 +290,9 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 tvDateRangeLabel.text = "ALL TIME"
             }
 
-            if (days.isNotEmpty() && dateSlider.visibility == View.VISIBLE) {
-                val sIdx = dateSlider.values[0].toInt()
-                val eIdx = dateSlider.values[1].toInt()
+            if (days.isNotEmpty() && dateSlider.visibility == View.VISIBLE && presetRangeLabel == null) {
+                val sIdx = dateSlider.values[0].toInt().coerceIn(days.indices)
+                val eIdx = dateSlider.values[1].toInt().coerceIn(days.indices)
                 tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
             }
 
