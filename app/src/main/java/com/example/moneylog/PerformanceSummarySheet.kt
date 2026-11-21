@@ -321,8 +321,7 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             if (totalVolume == 0L) {
                 progressIncomeSegment.visibility = View.VISIBLE
                 progressExpenseSegment.visibility = View.GONE
-                progressIncomeSegment.backgroundTintList = null
-                progressIncomeSegment.setBackgroundColor(requireContext().getColor(R.color.text_tertiary))
+                progressIncomeSegment.setBackgroundResource(R.drawable.bg_summary_neutral_segment)
                 progressIncomeSegment.layoutParams = LinearLayout.LayoutParams(
                     0, segmentHeight, 1f
                 )
@@ -330,6 +329,8 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 val incomeRatio = income.toFloat() / totalVolume.toFloat()
                 val expenseRatio = expense.toFloat() / totalVolume.toFloat()
 
+                progressIncomeSegment.setBackgroundResource(R.drawable.bg_summary_income_segment)
+                progressExpenseSegment.setBackgroundResource(R.drawable.bg_summary_expense_segment)
                 progressIncomeSegment.visibility = if (income > 0L) View.VISIBLE else View.GONE
                 progressExpenseSegment.visibility = if (expense > 0L) View.VISIBLE else View.GONE
 
