@@ -15,7 +15,6 @@ import androidx.fragment.app.activityViewModels
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.slider.RangeSlider
 import com.google.android.material.slider.Slider
 import java.text.SimpleDateFormat
@@ -87,7 +86,9 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         val tvPresetAll = view.findViewById<TextView>(R.id.tvPresetAll)
         val tvPeriodCredits = view.findViewById<TextView>(R.id.tvPeriodCredits)
         val tvPeriodDebits = view.findViewById<TextView>(R.id.tvPeriodDebits)
-        val progressCashFlow = view.findViewById<LinearProgressIndicator>(R.id.progressCashFlow)
+        val progressCashFlow = view.findViewById<LinearLayout>(R.id.progressCashFlow)
+        val progressIncomeSegment = view.findViewById<View>(R.id.progressIncomeSegment)
+        val progressExpenseSegment = view.findViewById<View>(R.id.progressExpenseSegment)
 
         // BIND AND ENLARGE TEXT SIZES FOR BOXES
         val tvTodayIncome = view.findViewById<TextView>(R.id.tvTodayIncome).apply { textSize = 15f }
@@ -313,23 +314,35 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 }
             ))
 
-            // Accurate cash-flow split using the real selected-range totals.
+            // Draw the cash-flow split as two independent segments. This avoids
+            // LinearProgressIndicator's rounded indicator cap appearing as a stray dot.
             val totalVolume = income + expense
+            val segmentHeight = (7 * resources.displayMetrics.density).toInt()
             if (totalVolume == 0L) {
-                // If 0, make it a neutral empty bar so it doesn't look like a huge expense
-                progressCashFlow.trackColor = requireContext().getColor(R.color.text_tertiary)
-                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.text_tertiary))
-                progressCashFlow.max = 100
-                progressCashFlow.setProgressCompat(0, true)
+                progressIncomeSegment.visibility = View.VISIBLE
+                progressExpenseSegment.visibility = View.GONE
+                progressIncomeSegment.backgroundTintList = null
+                progressIncomeSegment.setBackgroundColor(requireContext().getColor(R.color.text_tertiary))
+                progressIncomeSegment.layoutParams = LinearLayout.LayoutParams(
+                    0, segmentHeight, 1f
+                )
             } else {
-                // Reset colors to normal (Green for Income, Red for Expense track)
-                progressCashFlow.trackColor = requireContext().getColor(R.color.expense_red)
-                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.income_green))
+                val incomeRatio = income.toFloat() / totalVolume.toFloat()
+                val expenseRatio = expense.toFloat() / totalVolume.toFloat()
 
-                // Use percentages to completely avoid Int.MAX_VALUE crashes
-                progressCashFlow.max = 100
-                val incomePercentage = ((stats.periodCredits.toDouble() / totalVolume.toDouble()) * 100).toInt()
-                progressCashFlow.setProgressCompat(incomePercentage, true)
+                progressIncomeSegment.visibility = if (income > 0L) View.VISIBLE else View.GONE
+                progressExpenseSegment.visibility = if (expense > 0L) View.VISIBLE else View.GONE
+
+                if (income > 0L) {
+                    progressIncomeSegment.layoutParams = LinearLayout.LayoutParams(
+                        0, segmentHeight, incomeRatio
+                    )
+                }
+                if (expense > 0L) {
+                    progressExpenseSegment.layoutParams = LinearLayout.LayoutParams(
+                        0, segmentHeight, expenseRatio
+                    )
+                }
             }
 
             animateText(tvTodayIncome, stats.todayCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
