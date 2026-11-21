@@ -12,6 +12,7 @@ class AboutActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_about)
+        EdgeToEdgeCompat.apply(window, findViewById(R.id.main))
 
         val tvVersion = findViewById<TextView>(R.id.tvVersion)
         val versionName = BuildConfig.VERSION_NAME
