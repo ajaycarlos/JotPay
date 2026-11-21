@@ -2,7 +2,6 @@
     <style name="Base.Theme.MoneyLog" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/accent_calm</item>
 
-        <item name="android:statusBarColor">@color/bg_app</item>
         <item name="android:windowLightStatusBar">false</item> <item name="materialAlertDialogTheme">@style/ChatLiteDialog</item>
     </style>
 
