@@ -15,7 +15,6 @@ import androidx.fragment.app.activityViewModels
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.slider.RangeSlider
 import com.google.android.material.slider.Slider
 import java.text.SimpleDateFormat
@@ -81,9 +80,15 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
         val dateSlider = view.findViewById<RangeSlider>(R.id.dateSlider)
 
         val tvPeriodNet = view.findViewById<TextView>(R.id.tvPeriodNet)
+        val tvPeriodMargin = view.findViewById<TextView>(R.id.tvPeriodMargin)
+        val tvPresetWeek = view.findViewById<TextView>(R.id.tvPresetWeek)
+        val tvPresetMonth = view.findViewById<TextView>(R.id.tvPresetMonth)
+        val tvPresetAll = view.findViewById<TextView>(R.id.tvPresetAll)
         val tvPeriodCredits = view.findViewById<TextView>(R.id.tvPeriodCredits)
         val tvPeriodDebits = view.findViewById<TextView>(R.id.tvPeriodDebits)
-        val progressCashFlow = view.findViewById<LinearProgressIndicator>(R.id.progressCashFlow)
+        val progressCashFlow = view.findViewById<LinearLayout>(R.id.progressCashFlow)
+        val progressIncomeSegment = view.findViewById<View>(R.id.progressIncomeSegment)
+        val progressExpenseSegment = view.findViewById<View>(R.id.progressExpenseSegment)
 
         // BIND AND ENLARGE TEXT SIZES FOR BOXES
         val tvTodayIncome = view.findViewById<TextView>(R.id.tvTodayIncome).apply { textSize = 15f }
@@ -166,13 +171,93 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
 
         // Keep rest of observation logic intact
         var isSliderInitialized = false
+        var isApplyingPreset = false
+        var availableDays: List<Long> = emptyList()
+        var presetRangeLabel: String? = "ALL TIME"
         val sliderDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+
+        fun selectPreset(selected: TextView?) {
+            listOf(tvPresetWeek, tvPresetMonth, tvPresetAll).forEach { preset ->
+                val isSelected = preset == selected
+                preset.setBackgroundResource(
+                    if (isSelected) R.drawable.bg_summary_preset_selected
+                    else R.drawable.bg_summary_preset
+                )
+                preset.setTextColor(requireContext().getColor(
+                    if (isSelected) R.color.text_primary else R.color.text_secondary
+                ))
+            }
+        }
+
+        fun applyPreset(daysBack: Long?) {
+            val days = availableDays
+            if (days.isEmpty()) return
+
+            val endIndex = days.lastIndex
+            val startCalendar = java.util.Calendar.getInstance()
+            startCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            startCalendar.set(java.util.Calendar.MINUTE, 0)
+            startCalendar.set(java.util.Calendar.SECOND, 0)
+            startCalendar.set(java.util.Calendar.MILLISECOND, 0)
+
+            val endCalendar = (startCalendar.clone() as java.util.Calendar).apply {
+                add(java.util.Calendar.DAY_OF_YEAR, 1)
+                add(java.util.Calendar.MILLISECOND, -1)
+            }
+
+            val startTimestamp: Long
+            val endTimestamp: Long
+            if (daysBack == null) {
+                startTimestamp = 0L
+                endTimestamp = Long.MAX_VALUE
+                presetRangeLabel = "ALL TIME"
+            } else {
+                // Use calendar days, not the first/last transaction timestamps.
+                // 1W includes today and the previous 6 days; 1M includes today and
+                // the previous 29 days. This keeps the presets distinct even when
+                // there are days with no transactions.
+                val numberOfDays = (daysBack / (24L * 60L * 60L * 1000L)).toInt()
+                startCalendar.add(java.util.Calendar.DAY_OF_YEAR, -(numberOfDays - 1))
+                startTimestamp = startCalendar.timeInMillis
+                endTimestamp = endCalendar.timeInMillis
+                presetRangeLabel = "${sliderDateFormat.format(Date(startTimestamp))}  —  ${sliderDateFormat.format(Date(endCalendar.timeInMillis))}".uppercase()
+            }
+
+            // The slider represents days that contain transactions; snap its handles
+            // to the nearest available entries without changing the actual date filter.
+            val startIndex = if (daysBack == null) 0 else {
+                days.indexOfFirst { it >= startTimestamp }.let { if (it < 0) days.lastIndex else it }
+            }
+            if (days.size > 1 && dateSlider.visibility == View.VISIBLE) {
+                isApplyingPreset = true
+                dateSlider.values = listOf(startIndex.toFloat(), endIndex.toFloat())
+                isApplyingPreset = false
+            }
+
+            viewModel.setDateRange(startTimestamp, endTimestamp)
+            tvDateRangeLabel.text = presetRangeLabel
+        }
+
+        tvPresetWeek.setOnClickListener {
+            applyPreset(7L * 24L * 60L * 60L * 1000L)
+            selectPreset(tvPresetWeek)
+        }
+        tvPresetMonth.setOnClickListener {
+            applyPreset(30L * 24L * 60L * 60L * 1000L)
+            selectPreset(tvPresetMonth)
+        }
+        tvPresetAll.setOnClickListener {
+            applyPreset(null)
+            selectPreset(tvPresetAll)
+        }
 
         viewModel.setDateRange(0L, Long.MAX_VALUE)
         tvDateRangeLabel.text = "ALL TIME"
+        selectPreset(tvPresetAll)
 
         viewModel.performanceStats.observe(viewLifecycleOwner) { stats ->
             val days = stats.availableTimestamps
+            availableDays = days
 
             if (days.size > 1 && !isSliderInitialized) {
                 dateSlider.visibility = View.VISIBLE
@@ -180,14 +265,20 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 dateSlider.valueTo = (days.size - 1).toFloat()
                 dateSlider.stepSize = 1f
 
-                val startIdx = days.indexOfFirst { it >= (viewModel.dateRange.value?.first ?: 0L) }.coerceAtLeast(0)
-                val endIdx = days.indexOfLast { it <= (viewModel.dateRange.value?.second ?: Long.MAX_VALUE) }.coerceAtMost(days.size - 1)
-                dateSlider.values = listOf(startIdx.toFloat(), endIdx.toFloat())
+                val startIdxRaw = days.indexOfFirst { it >= (viewModel.dateRange.value?.first ?: 0L) }
+                val endIdxRaw = days.indexOfLast { it <= (viewModel.dateRange.value?.second ?: Long.MAX_VALUE) }
+                val startIdx = if (startIdxRaw < 0) 0 else startIdxRaw
+                val endIdx = if (endIdxRaw < 0) days.lastIndex else endIdxRaw
+                dateSlider.values = listOf(minOf(startIdx, endIdx).toFloat(), maxOf(startIdx, endIdx).toFloat())
 
                 dateSlider.addOnChangeListener { slider, _, _ ->
-                    val sIdx = slider.values[0].toInt()
-                    val eIdx = slider.values[1].toInt()
-                    tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
+                    val sIdx = slider.values[0].toInt().coerceIn(days.indices)
+                    val eIdx = slider.values[1].toInt().coerceIn(days.indices)
+                    if (!isApplyingPreset) {
+                        presetRangeLabel = null
+                        tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
+                        selectPreset(null)
+                    }
                 }
 
                 dateSlider.addOnSliderTouchListener(object : RangeSlider.OnSliderTouchListener {
@@ -204,9 +295,9 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
                 tvDateRangeLabel.text = "ALL TIME"
             }
 
-            if (days.isNotEmpty() && dateSlider.visibility == View.VISIBLE) {
-                val sIdx = dateSlider.values[0].toInt()
-                val eIdx = dateSlider.values[1].toInt()
+            if (days.isNotEmpty() && dateSlider.visibility == View.VISIBLE && presetRangeLabel == null) {
+                val sIdx = dateSlider.values[0].toInt().coerceIn(days.indices)
+                val eIdx = dateSlider.values[1].toInt().coerceIn(days.indices)
                 tvDateRangeLabel.text = "${sliderDateFormat.format(Date(days[sIdx]))}  —  ${sliderDateFormat.format(Date(days[eIdx]))}".uppercase()
             }
 
@@ -214,27 +305,72 @@ class PerformanceSummarySheet : BottomSheetDialogFragment() {
             tvWeekNet.setTextColor(requireContext().getColor(if (stats.weekNet > 0L) R.color.income_green else if (stats.weekNet < 0L) R.color.expense_red else R.color.text_primary))
             tvMonthNet.setTextColor(requireContext().getColor(if (stats.monthNet > 0L) R.color.income_green else if (stats.monthNet < 0L) R.color.expense_red else R.color.text_primary))
 
-            animateText(tvPeriodNet, stats.periodNet) { v -> "Net: $symbol ${fmt(v)}" }
-            animateText(tvPeriodCredits, stats.periodCredits) { v -> "+ $symbol ${fmt(abs(v))}" }
+            val income = stats.periodCredits
+            val expense = abs(stats.periodDebits)
+            val netSign = when {
+                stats.periodNet > 0L -> "+ "
+                stats.periodNet < 0L -> "- "
+                else -> ""
+            }
+            animateText(tvPeriodNet, stats.periodNet) { v -> "$netSign$symbol ${fmt(abs(v))}" }
+            tvPeriodNet.setTextColor(requireContext().getColor(
+                when {
+                    stats.periodNet > 0L -> R.color.income_green
+                    stats.periodNet < 0L -> R.color.expense_red
+                    else -> R.color.text_primary
+                }
+            ))
+            animateText(tvPeriodCredits, income) { v -> "+ $symbol ${fmt(abs(v))}" }
             animateText(tvPeriodDebits, stats.periodDebits) { v -> "- $symbol ${fmt(abs(v))}" }
 
-            // FIX: Accurate Cash Flow Progress Bar using Percentages
-            val totalVolume = stats.periodCredits + abs(stats.periodDebits)
-            if (totalVolume == 0L) {
-                // If 0, make it a neutral empty bar so it doesn't look like a huge expense
-                progressCashFlow.trackColor = requireContext().getColor(R.color.text_tertiary)
-                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.text_tertiary))
-                progressCashFlow.max = 100
-                progressCashFlow.setProgressCompat(0, true)
+            val marginPercent = if (income > 0L) {
+                ((income - expense).toDouble() / income.toDouble()) * 100.0
             } else {
-                // Reset colors to normal (Green for Income, Red for Expense track)
-                progressCashFlow.trackColor = requireContext().getColor(R.color.expense_red)
-                progressCashFlow.setIndicatorColor(requireContext().getColor(R.color.income_green))
+                0.0
+            }
+            tvPeriodMargin.text = when {
+                income <= 0L -> "— no income"
+                marginPercent >= 0.0 -> "↗ +${String.format(Locale.getDefault(), "%.1f", marginPercent)}% margin"
+                else -> "↘ ${String.format(Locale.getDefault(), "%.1f", marginPercent)}% deficit"
+            }
+            tvPeriodMargin.setTextColor(requireContext().getColor(
+                when {
+                    income <= 0L -> R.color.text_secondary
+                    marginPercent >= 0.0 -> R.color.income_muted
+                    else -> R.color.expense_muted
+                }
+            ))
 
-                // Use percentages to completely avoid Int.MAX_VALUE crashes
-                progressCashFlow.max = 100
-                val incomePercentage = ((stats.periodCredits.toDouble() / totalVolume.toDouble()) * 100).toInt()
-                progressCashFlow.setProgressCompat(incomePercentage, true)
+            // Draw the cash-flow split as two independent segments. This avoids
+            // LinearProgressIndicator's rounded indicator cap appearing as a stray dot.
+            val totalVolume = income + expense
+            val segmentHeight = (7 * resources.displayMetrics.density).toInt()
+            if (totalVolume == 0L) {
+                progressIncomeSegment.visibility = View.VISIBLE
+                progressExpenseSegment.visibility = View.GONE
+                progressIncomeSegment.setBackgroundResource(R.drawable.bg_summary_neutral_segment)
+                progressIncomeSegment.layoutParams = LinearLayout.LayoutParams(
+                    0, segmentHeight, 1f
+                )
+            } else {
+                val incomeRatio = income.toFloat() / totalVolume.toFloat()
+                val expenseRatio = expense.toFloat() / totalVolume.toFloat()
+
+                progressIncomeSegment.setBackgroundResource(R.drawable.bg_summary_income_segment)
+                progressExpenseSegment.setBackgroundResource(R.drawable.bg_summary_expense_segment)
+                progressIncomeSegment.visibility = if (income > 0L) View.VISIBLE else View.GONE
+                progressExpenseSegment.visibility = if (expense > 0L) View.VISIBLE else View.GONE
+
+                if (income > 0L) {
+                    progressIncomeSegment.layoutParams = LinearLayout.LayoutParams(
+                        0, segmentHeight, incomeRatio
+                    )
+                }
+                if (expense > 0L) {
+                    progressExpenseSegment.layoutParams = LinearLayout.LayoutParams(
+                        0, segmentHeight, expenseRatio
+                    )
+                }
             }
 
             animateText(tvTodayIncome, stats.todayCredits) { v -> "+ $symbol ${fmt(abs(v))}" }

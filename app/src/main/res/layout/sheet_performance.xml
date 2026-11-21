@@ -3,12 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212">
+    android:background="#0D0D0F">
 
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#121212">
+        android:background="#0D0D0F">
 
         <com.example.moneylog.TimelineMapView
             android:id="@+id/timelineMapView"
@@ -20,6 +20,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerInParent="true"
+            android:padding="24dp"
             android:text="No logs yet. Add transactions to see your timeline!"
             android:textColor="@color/text_secondary"
             android:textSize="14sp"
@@ -40,12 +41,9 @@
             android:paddingEnd="18dp"
             android:elevation="16dp">
 
-            <!-- Recenter Button -->
             <FrameLayout
                 android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_gravity="center">
-
+                android:layout_height="40dp">
                 <ImageButton
                     android:id="@+id/btnRecenter"
                     android:layout_width="match_parent"
@@ -57,30 +55,25 @@
                     app:tint="@color/text_primary" />
             </FrameLayout>
 
-            <!-- Divider -->
             <View
                 android:layout_width="1dp"
                 android:layout_height="20dp"
                 android:layout_marginHorizontal="12dp"
                 android:background="#33FFFFFF" />
 
-            <!-- Slider -->
             <com.google.android.material.slider.Slider
                 android:id="@+id/zoomSlider"
                 style="@style/Widget.MaterialComponents.Slider"
                 android:layout_width="140dp"
                 android:layout_height="wrap_content"
-
                 android:valueFrom="0.5"
                 android:valueTo="3.0"
                 android:value="0.8"
-
                 app:labelBehavior="gone"
                 app:thumbRadius="5dp"
                 app:thumbElevation="2dp"
                 app:trackHeight="2dp"
                 app:haloRadius="12dp"
-
                 app:thumbColor="@color/text_primary"
                 app:trackColorActive="@color/text_primary"
                 app:trackColorInactive="#2A2A2E" />
@@ -104,32 +97,95 @@
         android:id="@+id/summaryContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fillViewport="true"
-        android:background="#121212">
+        android:fillViewport="false"
+        android:clipToPadding="false"
+        android:background="@drawable/bg_dialog_rounded"
+        android:backgroundTint="#0D0D0F">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="18dp">
 
             <View
-                android:layout_width="40dp"
+                android:layout_width="44dp"
                 android:layout_height="4dp"
                 android:layout_gravity="center_horizontal"
-                android:background="@color/text_tertiary"
-                android:layout_marginBottom="24dp" />
+                android:background="#38383E"
+                android:layout_marginBottom="18dp" />
 
-            <TextView
-                android:id="@+id/tvDateRangeLabel"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="ALL TIME"
-                android:textAlignment="center"
-                android:textColor="@color/text_secondary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:letterSpacing="0.1" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:background="@drawable/bg_summary_live_dot" />
+
+                <TextView
+                    android:id="@+id/tvDateRangeLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="7dp"
+                    android:text="ALL TIME"
+                    android:textColor="#D1D1D6"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.08"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:padding="2dp"
+                    android:background="@drawable/bg_summary_preset_track">
+
+                    <TextView
+                        android:id="@+id/tvPresetWeek"
+                        android:layout_width="34dp"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="1W"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:textColor="#85858D"
+                        android:background="@drawable/bg_summary_preset" />
+
+                    <TextView
+                        android:id="@+id/tvPresetMonth"
+                        android:layout_width="34dp"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="1M"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:textColor="#85858D"
+                        android:background="@drawable/bg_summary_preset" />
+
+                    <TextView
+                        android:id="@+id/tvPresetAll"
+                        android:layout_width="38dp"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="ALL"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"
+                        android:background="@drawable/bg_summary_preset_selected" />
+                </LinearLayout>
+            </LinearLayout>
 
             <com.google.android.material.slider.RangeSlider
                 android:id="@+id/dateSlider"
@@ -137,92 +193,479 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:layout_marginBottom="8dp"
-                app:trackThickness="4dp"
-                app:trackColorActive="@color/text_primary"
-                app:trackColorInactive="#333333"
-                app:thumbColor="@color/text_primary"
-                app:thumbRadius="8dp"
-                app:thumbElevation="0dp"
-                app:haloRadius="0dp"
+                android:layout_marginBottom="4dp"
+                app:trackThickness="3dp"
+                app:trackColorActive="#E8E8EC"
+                app:trackColorInactive="#37373D"
+                app:thumbColor="#FFFFFF"
+                app:thumbRadius="7dp"
+                app:thumbElevation="2dp"
+                app:haloRadius="12dp"
                 app:tickVisible="true"
-                app:tickColorActive="#888888"
-                app:tickColorInactive="#888888"
+                app:tickColorActive="#A7A7AD"
+                app:tickColorInactive="#55555C"
                 app:labelBehavior="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="2dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="NET BALANCE"
+                    android:textColor="#92929A"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.16" />
+
+                <TextView
+                    android:id="@+id/tvPeriodMargin"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="9dp"
+                    android:paddingEnd="9dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:text="+0.0% margin"
+                    android:textColor="#10B981"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/bg_summary_margin" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tvPeriodNet"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Net: 0"
+                android:text="₹ 0"
                 android:textColor="@color/text_primary"
-                android:textSize="28sp"
-                android:fontFamily="sans-serif-black"
-                android:layout_marginBottom="24dp" />
+                android:textSize="36sp"
+                android:fontFamily="sans-serif"
+                android:textStyle="bold"
+                android:letterSpacing="-0.03"
+                android:layout_marginBottom="16dp" />
 
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="INCOME" android:textColor="@color/income_muted" android:textSize="10sp" />
-                    <TextView android:id="@+id/tvPeriodCredits" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/income_green" android:textSize="18sp" android:fontFamily="sans-serif-bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="● INCOME"
+                        android:textColor="@color/income_muted"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.12" />
+                    <TextView
+                        android:id="@+id/tvPeriodCredits"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="+ ₹ 0"
+                        android:textColor="@color/income_green"
+                        android:textSize="18sp"
+                        android:fontFamily="sans-serif"
+                        android:textStyle="bold"
+                        android:singleLine="true" />
                 </LinearLayout>
-                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="end">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="EXPENSES" android:textColor="@color/expense_muted" android:textSize="10sp" />
-                    <TextView android:id="@+id/tvPeriodDebits" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/expense_red" android:textSize="18sp" android:fontFamily="sans-serif-bold" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="end">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="EXPENSES ●"
+                        android:textColor="@color/expense_muted"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.12" />
+                    <TextView
+                        android:id="@+id/tvPeriodDebits"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="- ₹ 0"
+                        android:textColor="@color/expense_red"
+                        android:textSize="18sp"
+                        android:fontFamily="sans-serif"
+                        android:textStyle="bold"
+                        android:singleLine="true" />
                 </LinearLayout>
             </LinearLayout>
 
-            <com.google.android.material.progressindicator.LinearProgressIndicator
+            <LinearLayout
                 android:id="@+id/progressCashFlow"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="7dp"
                 android:layout_marginTop="12dp"
                 android:layout_marginBottom="16dp"
-                app:trackThickness="6dp"
-                app:trackCornerRadius="3dp"
-                app:indicatorColor="@color/income_green"
-                app:trackColor="@color/expense_red" />
+                android:orientation="horizontal"
+                android:background="@android:color/transparent"
+                android:clipChildren="true"
+                android:clipToPadding="true">
 
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="12dp">
-                    <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="6dp" app:cardBackgroundColor="#1C1C1E" app:cardElevation="0dp" app:strokeWidth="1dp" app:strokeColor="#333333" app:cardCornerRadius="16dp">
-                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TODAY" android:textColor="@color/text_secondary" android:textSize="10sp" android:fontFamily="sans-serif-black" android:layout_marginBottom="12dp" />
-                            <TextView android:id="@+id/tvTodayIncome" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/income_green" android:textSize="12sp" />
-                            <TextView android:id="@+id/tvTodayExpense" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/expense_red" android:textSize="12sp" />
-                            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1AFFFFFF" android:layout_marginTop="8dp" android:layout_marginBottom="8dp" />
-                            <TextView android:id="@+id/tvTodayNet" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/text_primary" android:textSize="14sp" android:fontFamily="sans-serif-black" />
+                <View
+                    android:id="@+id/progressIncomeSegment"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_summary_income_segment" />
+
+                <View
+                    android:id="@+id/progressExpenseSegment"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_summary_expense_segment" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    app:cardBackgroundColor="#131316"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#29292F"
+                    app:cardCornerRadius="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="13dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="TODAY"
+                            android:textColor="#A5A5AD"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:letterSpacing="0.14"
+                            android:layout_marginBottom="10dp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="In"
+                                android:textColor="#A5A5AD"
+                                android:textSize="12sp" />
+                            <TextView
+                                android:id="@+id/tvTodayIncome"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="+ ₹ 0"
+                                android:textColor="@color/income_green"
+                                android:textSize="12sp"
+                                android:singleLine="true" />
                         </LinearLayout>
-                    </com.google.android.material.card.MaterialCardView>
-                    <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="6dp" app:cardBackgroundColor="#1C1C1E" app:cardElevation="0dp" app:strokeWidth="1dp" app:strokeColor="#333333" app:cardCornerRadius="16dp">
-                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="THIS WEEK" android:textColor="@color/text_secondary" android:textSize="10sp" android:fontFamily="sans-serif-black" android:layout_marginBottom="12dp" />
-                            <TextView android:id="@+id/tvWeekIncome" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/income_green" android:textSize="12sp" />
-                            <TextView android:id="@+id/tvWeekExpense" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/expense_red" android:textSize="12sp" />
-                            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1AFFFFFF" android:layout_marginTop="8dp" android:layout_marginBottom="8dp" />
-                            <TextView android:id="@+id/tvWeekNet" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/text_primary" android:textSize="14sp" android:fontFamily="sans-serif-black" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="5dp">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Out"
+                                android:textColor="#A5A5AD"
+                                android:textSize="12sp" />
+                            <TextView
+                                android:id="@+id/tvTodayExpense"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="- ₹ 0"
+                                android:textColor="@color/expense_red"
+                                android:textSize="12sp"
+                                android:singleLine="true" />
                         </LinearLayout>
-                    </com.google.android.material.card.MaterialCardView>
-                </LinearLayout>
-                <com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" app:cardBackgroundColor="#1C1C1E" app:cardElevation="0dp" app:strokeWidth="1dp" app:strokeColor="#333333" app:cardCornerRadius="16dp">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="THIS MONTH" android:textColor="@color/text_secondary" android:textSize="10sp" android:fontFamily="sans-serif-black" android:layout_marginBottom="12dp" />
-                        <TextView android:id="@+id/tvMonthIncome" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/income_green" android:textSize="12sp" />
-                        <TextView android:id="@+id/tvMonthExpense" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/expense_red" android:textSize="12sp" />
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#1AFFFFFF" android:layout_marginTop="8dp" android:layout_marginBottom="8dp" />
-                        <TextView android:id="@+id/tvMonthNet" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="@color/text_primary" android:textSize="14sp" android:fontFamily="sans-serif-black" />
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginTop="10dp"
+                            android:layout_marginBottom="8dp"
+                            android:background="#25252B" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="NET"
+                                android:textColor="#92929A"
+                                android:textSize="10sp"
+                                android:fontFamily="monospace"
+                                android:letterSpacing="0.12" />
+                            <TextView
+                                android:id="@+id/tvTodayNet"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="₹ 0"
+                                android:textColor="@color/text_primary"
+                                android:textSize="14sp"
+                                android:textStyle="bold"
+                                android:singleLine="true" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    app:cardBackgroundColor="#131316"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#29292F"
+                    app:cardCornerRadius="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="13dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="THIS WEEK"
+                            android:textColor="#A5A5AD"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:letterSpacing="0.14"
+                            android:layout_marginBottom="10dp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="In"
+                                android:textColor="#A5A5AD"
+                                android:textSize="12sp" />
+                            <TextView
+                                android:id="@+id/tvWeekIncome"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="+ ₹ 0"
+                                android:textColor="@color/income_green"
+                                android:textSize="12sp"
+                                android:singleLine="true" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="5dp">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Out"
+                                android:textColor="#A5A5AD"
+                                android:textSize="12sp" />
+                            <TextView
+                                android:id="@+id/tvWeekExpense"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="- ₹ 0"
+                                android:textColor="@color/expense_red"
+                                android:textSize="12sp"
+                                android:singleLine="true" />
+                        </LinearLayout>
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginTop="10dp"
+                            android:layout_marginBottom="8dp"
+                            android:background="#25252B" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="NET"
+                                android:textColor="#92929A"
+                                android:textSize="10sp"
+                                android:fontFamily="monospace"
+                                android:letterSpacing="0.12" />
+                            <TextView
+                                android:id="@+id/tvWeekNet"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="₹ 0"
+                                android:textColor="@color/text_primary"
+                                android:textSize="14sp"
+                                android:textStyle="bold"
+                                android:singleLine="true" />
+                        </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="#131316"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="#29292F"
+                app:cardCornerRadius="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="THIS MONTH"
+                        android:textColor="#A5A5AD"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.14"
+                        android:layout_marginBottom="10dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Income"
+                            android:textColor="#C4C4CA"
+                            android:textSize="13sp" />
+                        <TextView
+                            android:id="@+id/tvMonthIncome"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="+ ₹ 0"
+                            android:textColor="@color/income_green"
+                            android:textSize="13sp"
+                            android:singleLine="true" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="7dp">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Expenses"
+                            android:textColor="#C4C4CA"
+                            android:textSize="13sp" />
+                        <TextView
+                            android:id="@+id/tvMonthExpense"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="- ₹ 0"
+                            android:textColor="@color/expense_red"
+                            android:textSize="13sp"
+                            android:singleLine="true" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="11dp"
+                        android:layout_marginBottom="9dp"
+                        android:background="#25252B" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="NET"
+                            android:textColor="#92929A"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:letterSpacing="0.12" />
+                        <TextView
+                            android:id="@+id/tvMonthNet"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="₹ 0"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:singleLine="true" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <TextView
                 android:id="@+id/tvDragHint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Drag up for Timeline"
+                android:text="⌃\nDrag up for Timeline"
                 android:textAlignment="center"
-                android:textColor="@color/text_tertiary"
+                android:gravity="center"
+                android:textColor="#777780"
                 android:textSize="12sp"
-                android:layout_marginTop="8dp" />
+                android:lineSpacingExtra="2dp"
+                android:layout_marginTop="12dp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
@@ -230,6 +673,5 @@
         android:id="@+id/bottomCurtain"
         android:layout_width="match_parent"
         android:layout_height="800dp"
-        android:background="#121212" />
-
+        android:background="#0D0D0F" />
 </FrameLayout>
