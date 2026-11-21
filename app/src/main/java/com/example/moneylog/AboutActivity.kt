@@ -20,7 +20,7 @@ class AboutActivity : AppCompatActivity() {
 
         // 1. Website Click
         findViewById<LinearLayout>(R.id.rowWebsite).setOnClickListener {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://thecarlos.in"))
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ajaycarlos.is-a.dev"))
             startActivity(intent)
         }
 
