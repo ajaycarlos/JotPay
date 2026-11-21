@@ -95,6 +95,7 @@
 
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
+            EdgeToEdgeCompat.apply(window, binding.root)
 
             if (savedInstanceState != null) {
                 pendingEditId = savedInstanceState.getLong("editing_id", 0L)
