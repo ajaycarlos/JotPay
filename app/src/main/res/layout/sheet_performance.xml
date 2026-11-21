@@ -308,16 +308,29 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <com.google.android.material.progressindicator.LinearProgressIndicator
+            <LinearLayout
                 android:id="@+id/progressCashFlow"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="7dp"
                 android:layout_marginTop="12dp"
                 android:layout_marginBottom="16dp"
-                app:trackThickness="7dp"
-                app:trackCornerRadius="4dp"
-                app:indicatorColor="@color/income_green"
-                app:trackColor="@color/expense_red" />
+                android:orientation="horizontal"
+                android:background="@android:color/transparent"
+                android:clipChildren="true"
+                android:clipToPadding="true">
+
+                <View
+                    android:id="@+id/progressIncomeSegment"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_summary_income_segment" />
+
+                <View
+                    android:id="@+id/progressExpenseSegment"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_summary_expense_segment" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
