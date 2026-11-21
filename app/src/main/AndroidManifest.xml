@@ -41,6 +41,11 @@
             android:name=".LinkDeviceActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".LinkTransferActivity"
+            android:exported="false"
+            android:windowSoftInputMode="stateHidden" />
+
         <activity android:name=".AssetsLiabilitiesActivity" />
 
         <activity

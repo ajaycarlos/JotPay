@@ -75,6 +75,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 // STEP 2: PUSH LOCAL CHANGES TO SERVER
                 val localData = db.transactionDao().getAll()
                 val pushedKeys = mutableSetOf<String>()
+                val batchUpdates = mutableMapOf<String, Any>()
+                val pendingEditsToRemove = mutableListOf<Pair<Long, String>>()
 
                 for (t in localData) {
                     val stableId = syncManager.generateStableId(t.timestamp)
@@ -130,13 +132,20 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
                         if (shouldPush) {
                             val encryptedData = EncryptionHelper.encrypt(jsonObject.toString(), secretKey)
-                            ref.child("transactions").child(stableId).setValue(encryptedData).await()
+                            batchUpdates[stableId] = encryptedData
                             pushedKeys.add(stableId)
 
                             if (isPendingEdit && pendingToken != null) {
-                                syncManager.removePendingEdit(t.timestamp, pendingToken)
+                                pendingEditsToRemove.add(Pair(t.timestamp, pendingToken))
                             }
                         }
+                    }
+                }
+
+                if (batchUpdates.isNotEmpty()) {
+                    ref.child("transactions").updateChildren(batchUpdates).await()
+                    for ((ts, token) in pendingEditsToRemove) {
+                        syncManager.removePendingEdit(ts, token)
                     }
                 }
 
